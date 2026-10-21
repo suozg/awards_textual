@@ -1,0 +1,339 @@
+"""Textual-порт AWARDS 53."""
+from __future__ import annotations
+
+import argparse
+import csv
+import io
+import sys
+from pathlib import Path
+
+# Дозволяє використовувати оригінальні config.py/create_db0.py з каталогу original/.
+_ORIGINAL_DIR = Path(__file__).resolve().parent / "original"
+if _ORIGINAL_DIR.is_dir() and str(_ORIGINAL_DIR) not in sys.path:
+    sys.path.insert(0, str(_ORIGINAL_DIR))
+
+from sqlcipher3 import dbapi2 as sqlite3
+from textual.app import App, ComposeResult
+from textual.containers import Horizontal, Vertical, VerticalScroll
+from textual.screen import ModalScreen
+from textual.theme import Theme
+from textual.widgets import (
+    Button, DataTable, Footer, Input, Label, Static,
+    TabbedContent, TabPane, TextArea,
+)
+
+from config import DATABASE_FILE_PATH, MASTERKEY, TITLE_PROG, VERSION
+
+_PROJECT_DIR = str(Path(__file__).resolve().parent)
+if _PROJECT_DIR in sys.path:
+    sys.path.remove(_PROJECT_DIR)
+sys.path.insert(0, _PROJECT_DIR)
+
+from dovidnyk_textual import DovidnykTab
+from search_tab_textual import SearchTab
+from kartka_textual import KartkaTab
+from text_panel_textual import TextPanel
+
+
+def connect_database(path: str, password: str):
+    """Відкриває SQLCipher-базу в режимі сумісності з наявною БД."""
+    conn = sqlite3.connect(path)
+    cur = conn.cursor()
+    cur.execute(f"PRAGMA key = '{password.replace(chr(39), chr(39)*2)}';")
+    cur.execute("PRAGMA cipher_compatibility = 3;")
+    cur.execute("PRAGMA kdf_iter = 64000;")
+    cur.execute("PRAGMA journal_mode=WAL;")
+    cur.execute("PRAGMA synchronous=NORMAL;")
+    cur.execute("PRAGMA cache_size = -64000;")
+    cur.execute("PRAGMA temp_store = MEMORY;")
+    cur.execute("SELECT name FROM sqlite_master WHERE type='table';")
+    if not cur.fetchall():
+        cur.close()
+        conn.close()
+        raise RuntimeError("У базі немає таблиць або пароль неправильний.")
+    conn.create_function("LOWER", 1, lambda value: str(value).lower())
+    return conn, cur
+
+
+class LoginScreen(ModalScreen[str | None]):
+    """Діалог входу до бази даних."""
+
+    def __init__(self, db_path: str, db_exists: bool):
+        super().__init__()
+        self.db_path = db_path
+        self.db_exists = db_exists
+        self._creation_needed = not Path(db_path).is_file()
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="login-box"):
+            yield Label("AWARDS 53" if self.db_exists else "AWARDS 53 - Створення бази даних", id="login-title")
+            yield Static(f"База: {self.db_path}", id="db-path")
+            yield Input(placeholder="Пароль бази даних", password=True, id="password")
+            yield Static("", id="login-error")
+            with Horizontal():
+                yield Button("Увійти", variant="primary", id="login")
+                yield Button("Вийти", id="cancel")
+
+    def on_mount(self) -> None:
+        self.query_one("#password", Input).focus()
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "cancel":
+            self.dismiss(None)
+        elif event.button.id == "login":
+            self._submit_password()
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        if event.input.id == "password":
+            self._submit_password()
+
+    def _submit_password(self) -> None:
+        password = self.query_one("#password", Input).value
+        if not password:
+            self.query_one("#login-error", Static).update("Введіть пароль бази даних.")
+            return
+        try:
+            # Перевіряємо стан файлу саме під час входу, а не лише під час запуску.
+            self.db_exists = Path(self.db_path).is_file()
+            if self._creation_needed:
+                # Створюємо каталог, якщо це перший запуск із новим шляхом до БД.
+                Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
+                # Використовуємо штатну функцію створення схеми з проєкту.
+                from create_db0 import create_database
+                if not create_database(self.db_path, password):
+                    raise RuntimeError("Не вдалося створити базу даних.")
+                self.db_exists = Path(self.db_path).is_file()
+
+            conn, cur = connect_database(self.db_path, password)
+            cur.close()
+            conn.close()
+            self._creation_needed = False
+            self.dismiss(password)
+        except Exception as exc:
+            self.query_one("#login-error", Static).update(f"Помилка: {exc}")
+            self.query_one("#password", Input).focus()
+
+
+class AwardsTextualApp(App):
+    CSS_PATH = "styles.tcss" 
+    TITLE = TITLE_PROG
+    SUB_TITLE = f"Textual port · {VERSION}"
+    BINDINGS = [
+        ("ctrl+q", "quit", "Вихід"),
+        ("f1", "toggle_theme", "Тема світла/темна"),
+    ]
+
+
+    def __init__(self, db_path: str, password: str):
+        super().__init__()
+        self.db_path = db_path
+        self.password = password
+        self.conn = None
+        self.cursor = None
+        self.presentations = []
+        self._card_search_revision = -1
+        self._dovidnyk_loaded = False
+        self._theme_names = ("gruvbox-dark", "gruvbox-light")
+        self.register_theme(Theme(
+            name="gruvbox-dark", primary="#d79921", secondary="#83a598",
+            warning="#fabd2f", error="#fb4934", success="#b8bb26",
+            accent="#fe8019", foreground="#ebdbb2", background="#282828",
+            surface="#3c3836", panel="#504945", boost="#665c54", dark=True,
+            variables={"text-muted": "#a89984"},
+        ))
+        self.register_theme(Theme(
+            name="gruvbox-light", primary="#b57614", secondary="#689d6a",
+            warning="#d79921", error="#cc241d", success="#98971a",
+            accent="#d65d0e", foreground="#3c3836", background="#fbf1c7",
+            surface="#f2e5bc", panel="#ebdbb2", boost="#d5c4a1", dark=False,
+            variables={"text-muted": "#7c6f64"},
+        ))
+        self.theme = "gruvbox-dark"
+
+    def compose(self) -> ComposeResult:
+        with TabbedContent(initial="tab-search"):
+            with TabPane("ПОШУК", id="tab-search"):
+                yield SearchTab(id="search-tab")
+            with TabPane("КАРТКА", id="tab-card"):
+                yield KartkaTab(id="kartka-tab")
+            with TabPane("ДОВІДНИК", id="tab-reference"):
+                yield DovidnykTab(id="dovidnyk-tab")
+            with TabPane("ЗВІТИ", id="tab-reports"):
+                with Vertical(classes="centered-pane"):
+                    yield Static("Ще не перенесено з wxPython.", classes="centered-text")
+            with TabPane("ТЕКСТ", id="tab-text"):
+                yield TextPanel(id="text-panel")
+            with TabPane("ВЕБ-ПОШУК", id="tab-web"):
+                with Vertical(classes="centered-pane"):
+                    yield Static("Ще не перенесено з wxPython.", classes="centered-text")
+            with TabPane("НАЛАШТУВАННЯ", id="tab-settings"):
+                with Vertical(classes="centered-pane"):
+                    yield Static("Ще не перенесено з wxPython.", classes="centered-text")
+            with TabPane("ЗАКОНИ", id="tab-laws"):
+                with Vertical(classes="centered-pane"):
+                    yield Static("Ще не перенесено з wxPython.", classes="centered-text")
+            with TabPane("SQL", id="tab-sql"):
+                with Vertical():
+                    yield Label("SQL-запит (Ctrl+Enter — виконати)")
+                    yield TextArea(id="sql-input")
+                    with Horizontal():
+                        yield Button("Виконати", variant="primary", id="sql-run")
+                        yield Button("EXPLAIN", id="sql-explain")
+                        yield Button("CSV", id="sql-csv")
+                    yield DataTable(id="sql-result", cursor_type="cell")
+            
+            with TabPane("ПРО", id="tab-about"):
+                with Vertical(classes="centered-pane"):
+                    yield Static(f"{TITLE_PROG}\nВерсія {VERSION}\nTextual-міграція.", classes="centered-text")
+        
+        yield Static("Тема: темна Gruvbox · F12 — перемкнути тему", id="status")
+        yield Footer()
+
+    def on_mount(self) -> None:
+        try:
+            self.conn, self.cursor = connect_database(self.db_path, self.password)
+            self.query_one("#search-tab", SearchTab).set_database(self.conn, self.cursor)
+            self.query_one("#kartka-tab", KartkaTab).set_database(self.conn, self.cursor)
+            self.query_one("#text-panel", TextPanel).set_database(self.conn, self.cursor)
+        except Exception as exc:
+            self.notify(f"Помилка підключення до БД: {exc}", severity="error", timeout=10)
+            self.exit()
+
+    def on_tabbed_content_tab_activated(self, event: TabbedContent.TabActivated) -> None:
+        if event.pane.id == "tab-reference" and not self._dovidnyk_loaded:
+            try:
+                self.query_one("#dovidnyk-tab", DovidnykTab).set_database(self.conn, self.cursor)
+                self._dovidnyk_loaded = True
+            except Exception as exc:
+                self.notify(f"Не вдалося завантажити довідник: {exc}", severity="error", timeout=10)
+        elif event.pane.id == "tab-card":
+            self._sync_card_with_search()
+
+    def _sync_card_with_search(self) -> None:
+        search_tab = self.query_one("#search-tab", SearchTab)
+        revision = search_tab.get_search_revision()
+        if revision == self._card_search_revision:
+            return
+
+        results, source = search_tab.get_latest_search_results()
+        if results is None:
+            return
+
+        self._card_search_revision = revision
+        self.query_one("#kartka-tab", KartkaTab).populate_and_load_search_results(
+            results, source
+        )
+
+    def _move_tab(self, step: int) -> None:
+        tabs = self.query_one(TabbedContent)
+        panes = list(tabs.query(TabPane))
+        current = next((i for i, pane in enumerate(panes) if pane.id == tabs.active), 0)
+        tabs.active = panes[(current + step) % len(panes)].id
+
+    def action_tab_1(self) -> None: self._activate("tab-search")
+    def action_tab_2(self) -> None: self._activate("tab-card")
+    def action_tab_3(self) -> None: self._activate("tab-reference")
+    def action_tab_4(self) -> None: self._activate("tab-reports")
+    def action_tab_5(self) -> None: self._activate("tab-text")
+    def action_tab_6(self) -> None: self._activate("tab-web")
+    def action_tab_7(self) -> None: self._activate("tab-settings")
+    def action_tab_8(self) -> None: self._activate("tab-laws")
+    def action_tab_9(self) -> None: self._activate("tab-sql")
+    def action_tab_10(self) -> None: self._activate("tab-about")
+
+    def action_toggle_theme(self) -> None:
+        self.theme = "gruvbox-light" if self.theme == "gruvbox-dark" else "gruvbox-dark"
+        theme_label = "світла Gruvbox" if self.theme == "gruvbox-light" else "темна Gruvbox"
+        self.query_one("#status", Static).update(f"Тема: {theme_label} (F12 — перемкнути)")
+
+    def _activate(self, tab_id: str) -> None:
+        self.query_one(TabbedContent).active = tab_id
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "search-button":
+            self.search_presentations()
+        elif event.button.id == "sql-run":
+            self.execute_sql()
+        elif event.button.id == "sql-explain":
+            self.execute_sql(explain=True)
+        elif event.button.id == "sql-csv":
+            self.export_csv()
+
+    def on_text_area_changed(self, event: TextArea.Changed) -> None:
+        if event.text_area.id == "sql-input" and event.text_area.has_focus:
+            pass
+
+    def execute_sql(self, explain: bool = False) -> None:
+        sql = self.query_one("#sql-input", TextArea).text.strip()
+        if not sql:
+            return
+        if explain:
+            sql = "EXPLAIN QUERY PLAN " + sql
+        try:
+            self.cursor.execute(sql)
+            table = self.query_one("#sql-result", DataTable)
+            table.clear(columns=True)
+            if self.cursor.description:
+                columns = [str(col[0]) for col in self.cursor.description]
+                table.add_columns(*columns)
+                for row in self.cursor.fetchall():
+                    table.add_row(*(str(value) if value is not None else "NULL" for value in row))
+            else:
+                self.conn.commit()
+                self.notify(f"Запит виконано. Змінено рядків: {self.cursor.rowcount}")
+            self.query_one("#status", Static).update("SQL: виконано")
+        except Exception as exc:
+            self.notify(f"SQL: {exc}", severity="error", timeout=10)
+            self.query_one("#status", Static).update("SQL: помилка")
+
+    def export_csv(self) -> None:
+        table = self.query_one("#sql-result", DataTable)
+        if not table.columns:
+            self.notify("Немає результатів для експорту.", severity="warning")
+            return
+        from datetime import datetime
+        path = Path.cwd() / f"awards_sql_{datetime.now():%Y%m%d_%H%M%S}.csv"
+        try:
+            with path.open("w", newline="", encoding="utf-8-sig") as stream:
+                writer = csv.writer(stream)
+                writer.writerow([column.label.plain for column in table.columns.values()])
+                for row_key in table.rows:
+                    writer.writerow([str(cell) for cell in table.get_row(row_key)])
+            self.notify(f"CSV збережено: {path}")
+        except Exception as exc:
+            self.notify(f"Помилка експорту CSV: {exc}", severity="error")
+
+    def on_unmount(self) -> None:
+        if self.cursor:
+            self.cursor.close()
+        if self.conn:
+            self.conn.close()
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="AWARDS 53")
+    parser.add_argument("-c", default=DATABASE_FILE_PATH, help="Шлях до файлу бази даних")
+    args = parser.parse_args()
+    db_exists = Path(args.c).is_file()
+    if MASTERKEY:
+        password = MASTERKEY
+        app = AwardsTextualApp(args.c, password)
+        app.run()
+        return
+    class LoginApp(App):
+        CSS_PATH = "styles.tcss"
+        def on_mount(self):
+            self.push_screen(LoginScreen(args.c, db_exists), self.got_password)
+        def got_password(self, password):
+            if password is None:
+                self.exit()
+            else:
+                self.exit(password)
+    login_app = LoginApp()
+    password = login_app.run()
+    if password:
+        AwardsTextualApp(args.c, password).run()
+
+
+if __name__ == "__main__":
+    main()

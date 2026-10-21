@@ -1,0 +1,529 @@
+/* ========================================================================= */
+/* О Б Щ И Е   С Т И Л И   И   Б А З О В Ы Й   Л А Й О У Т                    */
+/* ========================================================================= */
+
+Screen {
+    layout: vertical;
+}
+
+TabbedContent {
+    height: 1fr;
+    width: 1fr;
+}
+
+TabPane {
+    padding: 1;
+    height: 1fr;
+    width: 1fr;
+}
+
+.row {
+    height: auto;
+}
+
+.wide {
+    width: 1fr;
+}
+
+Footer {
+    dock: bottom;
+    height: auto;
+}
+
+#status {
+    height: 1;
+    dock: bottom;
+    padding: 0 1;
+    background: $panel;
+}
+
+.help {
+    color: $text-muted;
+}
+
+
+/* ========================================================================= */
+/*              С Т И Л И   П О    К О М П О Н Е Н Т А М                     */
+/* ========================================================================= */
+
+/* --- award_graph_modal.py --- */
+AwardGraphScreen {
+    align: center middle;
+}
+
+#graph-box {
+    width: 85%;
+    height: 90%;
+    background: $surface;
+    border: thick $primary;
+    padding: 1 2;
+}
+
+#graph-scroll-container {
+    height: 1fr;
+    border: solid $panel;
+    background: $boost;
+    overflow-y: auto;
+}
+
+#graph-chart {
+    width: 100%;
+}
+
+#graph-controls {
+    height: auto;
+    dock: bottom;
+    margin-top: 1;
+    align: center middle;
+}
+
+#graph-status {
+    margin-top: 1;
+    text-align: center;
+}
+
+
+
+
+
+
+
+/* ========================================================================= */
+/* СТИЛІ ВКЛАДКИ «КАРТКА» (KartkaTab)                                       */
+/* ========================================================================= */
+
+KartkaTab {
+    padding: 0;
+    overflow-y: auto;
+}
+
+/* Основні блоки */
+KartkaTab .box {
+    height: auto;
+    border: round $panel;
+    padding: 0 1;
+    margin-bottom: 0;
+    background: $surface;
+}
+
+KartkaTab .legend {
+    color: $primary;
+    text-style: bold;
+    margin-bottom: 0;
+}
+
+/* Рядки */
+KartkaTab .row {
+    height: auto;
+    margin-bottom: 0;
+    align: left middle;
+}
+
+/* Мітки */
+KartkaTab .row Label {
+    width: 16;
+    content-align: right middle;
+    padding-right: 1;
+}
+
+/* Поля введення та селекти */
+KartkaTab .row Input,
+KartkaTab .row Select {
+    width: 1fr;
+    margin-right: 1;
+}
+
+/* Інформація про особу */
+KartkaTab #person-select {
+    width: 1fr;
+}
+
+KartkaTab #person-count {
+    width: 6;
+    text-align: center;
+}
+
+KartkaTab #full-name {
+    width: 2fr;
+}
+
+KartkaTab #inn,
+KartkaTab #rank-select,
+KartkaTab #unit-select {
+    width: 1fr;
+}
+
+KartkaTab #birth-date-label {
+    width: auto;
+    padding: 0 1;
+    color: $text-muted;
+}
+
+/* Панелі подань та нагороджень */
+.screen-panel {
+    height: auto;
+    border: solid $boost;
+    padding: 0 1;
+    margin-bottom: 0;
+}
+
+/* Лічильники */
+KartkaTab #pres-count,
+KartkaTab #meed-count {
+    width: 6;
+    text-align: center;
+    content-align: center middle;
+}
+
+/* Текст подання */
+/* Розтягуємо текстове поле на всю доступну ширину */
+KartkaTab TextArea#pres-text {
+    width: 100%;
+    height: 5;
+    background: $background;
+    margin-bottom: 1;
+}
+
+/* Рядок із чекбоксами */
+#pres-checkboxes-row {
+    height: auto;
+    width: 100%;
+    align: left middle;
+}
+
+/* Відступи між чекбоксами в рядку */
+#pres-checkboxes-row Checkbox {
+    margin-right: 2;
+    width: auto;
+}
+
+#pres-checkboxes-row #goto-meed-btn {
+    width: auto;      /* Кнопка сжимается по длине текста */
+    height: 3;        /* Стандартная высота кнопки в Textual (можно поставить 3) */
+    min-width: 15;
+    margin-left: 2;
+}
+
+/* Перемикання між поданням і нагородженням */
+#card-screen-switch {
+    height: auto;
+    margin: 0;
+}
+
+#card-screen-switch Button {
+    width: 1fr;
+    margin: 0;
+}
+
+/* Нижня панель дій */
+#card-actions-row {
+    height: auto;
+    margin: 0;
+    align: left middle;
+}
+
+KartkaTab #delete-select {
+    width: 1fr;
+    margin-right: 1;
+}
+
+KartkaTab #save-btn,
+KartkaTab #clear-btn {
+    width: 18;
+    margin-left: 1;
+}
+
+/* Розташування полів та зображення нагороди */
+#meed-content-row {
+    height: auto;
+    width: 100%;
+}
+
+/* Ліва частина з полями займатиме основне місце */
+#meed-fields-col {
+    width: 1fr;
+    height: auto;
+}
+
+/* Права частина під зображення */
+
+#meed-image-col {
+    width: 16;
+    height: 11;
+    align: center middle;
+    content-align: center middle;
+    padding: 0;
+    margin-top: 1;
+}
+
+#award-image {
+    width: 100%;
+    height: 100%;
+    content-align: center middle;
+}
+
+
+
+
+
+/* ========================================================================= */
+/* --- dovidnyk_textual.py --- */
+ConfirmDeleteScreen { 
+    align: center middle; 
+}
+
+#confirm-box { 
+    width: 68; 
+    height: auto; 
+    padding: 1 2; 
+    border: round $error; 
+    background: $surface; 
+}
+
+#confirm-message { 
+    margin-bottom: 1; 
+}
+
+DovidnykTab { 
+    height: 1fr; 
+    width: 1fr; 
+}
+
+#dovidnyk-layout { 
+    height: 1fr; 
+    width: 1fr; 
+}
+
+#award-tree { 
+    width: 28%; 
+    min-width: 22; 
+    height: 1fr; 
+    border: round $panel; 
+    overflow-x: auto; 
+}
+
+#award-details { 
+    width: 1fr; 
+    height: 1fr; 
+    padding: 0 1; 
+}
+
+#empty-panel, #category-view, #award-view, #category-editor, #award-editor { 
+    height: 1fr; 
+}
+
+#award-view-layout { 
+    height: 1fr; 
+    width: 1fr; 
+}
+
+/* Текстова частина: фіксуємо кнопку в самому низу */
+#award-view-text { 
+    width: 1fr; 
+    height: 1fr; 
+    padding-right: 1; 
+    layout: vertical; 
+}
+
+#award-view-text .actions { 
+    dock: bottom; 
+    margin-top: 0; 
+}
+
+/* Права колонка та зображення: притискаємо чітко до лівого краю */
+#award-view-image-column { 
+    width: 34%; 
+    min-width: 24; 
+    max-width: 44; 
+    height: 1fr; 
+    padding: 1; 
+    border: round $panel; 
+    align: left middle; 
+}
+
+#view-image-preview { 
+    height: 1fr; 
+    width: 100%; 
+    min-height: 12; 
+    padding: 0; 
+    content-align: left middle; 
+}
+
+#view-law { 
+    height: 5; 
+    min-height: 3; 
+    margin-bottom: 1; 
+}
+
+#view-grounds { 
+    height: 1fr; 
+    min-height: 6; 
+}
+
+#category-view-description, #category-editor-description { 
+    height: 1fr; 
+    min-height: 5; 
+}
+
+#award-editor-grounds { 
+    height: 1fr; 
+    min-height: 5; 
+}
+
+#award-editor-law { 
+    height: 4; 
+}
+
+#category-editor-name, #award-editor-name, #award-editor-category, #award-editor-image-path { 
+    margin-bottom: 1; 
+}
+
+.field-label { 
+    margin-top: 1; 
+}
+
+.actions { 
+    height: auto; 
+    margin-top: 1; 
+}
+
+#image-status, #view-image-status { 
+    height: auto; 
+    color: $text-muted; 
+    margin-top: 1; 
+}
+
+.editor-toolbar { 
+    height: auto; 
+    margin-bottom: 1; 
+}
+
+.editor-title { 
+    width: 1fr; 
+    content-align: left middle; 
+}
+
+
+
+
+
+
+/* --- main_textual.py --- */
+LoginScreen { 
+    align: center middle; 
+}
+
+#login-box { 
+    width: auto; 
+    height: auto; 
+    padding: 1 2; 
+    border: round $accent; 
+    background: $surface; 
+}
+
+#login-title { 
+    margin: 1;
+    color: $accent;
+}
+
+#db-path { 
+    margin: 1; 
+}
+
+#password { 
+    margin: 1; 
+}
+
+#login-error { 
+    color: $error; 
+    height: auto; 
+}
+
+
+
+
+
+
+
+/* --- text_panel_textual.py --- */
+TextPanel { 
+    height: 1fr; 
+}
+
+#text-search-row { 
+    height: auto; 
+}
+
+#text-search-query { 
+    width: 1fr; 
+}
+
+#text-results-row { 
+    height: 1fr; 
+}
+
+#text-presentation-list { 
+    width: 22; 
+    min-width: 14; 
+    height: 1fr; 
+}
+
+#text-presentation-body { 
+    width: 1fr; 
+    height: 1fr; 
+    border: round $panel; 
+}
+
+
+
+
+
+
+
+/* --- search_tab_textual.py Вкладка пошуку --- */
+SearchTab {
+    height: 1fr;
+}
+
+#search-toolbar {
+    height: 3;
+    min-height: 3;
+    margin-bottom: 1;
+}
+
+#search-body {
+    height: 1fr;
+    min-height: 0;
+}
+
+#search-results-scroll {
+    height: 1fr;
+    min-height: 0;
+    margin-bottom: 1;
+}
+
+#search-results {
+    height: auto;
+}
+
+#search-images {
+    layout: horizontal;
+    height: 10;
+    width: 1fr;
+    overflow-x: auto;
+    overflow-y: hidden;
+}
+
+.search-award-image-card {
+    width: 20;
+    min-width: 20;
+    height: 9;
+    align: center top;
+}
+
+.award-image {
+    width: 18;
+    height: 8;
+}
+
+
