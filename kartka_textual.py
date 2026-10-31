@@ -133,22 +133,24 @@ class KartkaTab(VerticalScroll):
         self.presentations_list = []
         self.meed_list = []
 
+        # --- Завантаження дефолтного зображення (заглушки) ---
+        self.default_award_image_bytes = None
+        if self.settings_manager and hasattr(self.settings_manager, 'is_loaded') and self.settings_manager.is_loaded:
+            if hasattr(self.settings_manager, 'get_logo_blob'):
+                self.default_award_image_bytes = self.settings_manager.get_logo_blob()
+        
+
     def compose(self) -> ComposeResult:
         with Vertical(classes="box"):
             yield Label("Інформація про особу", classes="legend")
             with Horizontal(classes="row"):
-                yield Label("ID:")
                 yield Select([], id="person-select", prompt="Виберіть особу")
                 yield Static("-", id="person-count")
             with Horizontal(classes="row"):
-                yield Label("ПІБ:")
                 yield Input(placeholder="Прізвище Ім'я По батькові", id="full-name")
-                yield Label("РНОКПП:")
-                yield Input(placeholder="ІНН", id="inn", max_length=10)
+                yield Input(placeholder="РНОКПП (ІНН)", id="inn", max_length=10)
             with Horizontal(classes="row"):
-                yield Label("Звання:")
                 yield Select([], id="rank-select", prompt="Звання")
-                yield Label("Підрозділ:")
                 yield Select([], id="unit-select", prompt="Підрозділ")
                 yield Static("Дата народження: ---- -- --", id="birth-date-label")
 
@@ -159,18 +161,13 @@ class KartkaTab(VerticalScroll):
         with Vertical(id="pres-panel", classes="box screen-panel"):
             yield Label("Параметри подання", classes="legend")
             with Horizontal(classes="row"):
-                yield Label("ID подання:")
                 yield Select([], id="pres-select", prompt="Виберіть подання")
                 yield Static("-", id="pres-count")
             with Horizontal(classes="row"):
-                yield Label("Номер:")
-                yield Input(id="pres-number")
-                yield Label("Дата:")
-                yield Input(placeholder="РРРР-ММ-ДД", id="pres-date")
-                yield Label("Виконавець:")
+                yield Input(placeholder="Номер подання", id="pres-number")
+                yield Input(placeholder="Дата (РРРР-ММ-ДД)", id="pres-date")
                 yield Select([("ВП", "0"), ("МПЗ", "1"), ("Інші", "2")], id="pres-worker", prompt="Виконавець")
-                yield Label("Рух:")
-                yield Input(id="pres-movement")
+                yield Input(placeholder="Рух", id="pres-movement")
             
             # Текст подання на всю ширину та ряд чекбоксів під ним
             with Vertical(classes="row"):
@@ -188,29 +185,24 @@ class KartkaTab(VerticalScroll):
             # Головний контейнер: ліворуч поля, праворуч — картинка
             with Horizontal(id="meed-content-row"):
                 with Vertical(id="meed-fields-col"):
+                    # Ряд із селектором, лічильником та кнопкою переходу до подання
                     with Horizontal(classes="row"):
-                        yield Label("ID нагороди:")
                         yield Select([], id="meed-select", prompt="Виберіть нагородження")
                         yield Static("-", id="meed-count")
+                        yield Button("🔗 Перейти до подання", id="goto-pres-btn", variant="default")
+
                     with Horizontal(classes="row"):
-                        yield Label("Нагорода:")
                         yield Select([], id="award-select", prompt="Оберіть нагороду")
                     with Horizontal(classes="row"):
-                        yield Label("Рішення:")
-                        yield Input(id="award-basis")
-                        yield Label("Дата рішення:")
-                        yield Input(placeholder="РРРР-ММ-ДД", id="award-date")
+                        yield Input(placeholder="Рішення", id="award-basis")
+                        yield Input(placeholder="Дата рішення (РРРР-ММ-ДД)", id="award-date")
                         yield Checkbox("Посмертно", id="meed-dead")
                     with Horizontal(classes="row"):
-                        yield Label("Накладна:")
-                        yield Input(id="consing-n")
-                        yield Label("Номер нагороди:")
-                        yield Input(id="number-meed")
+                        yield Input(placeholder="Накладна", id="consing-n")
+                        yield Input(placeholder="Номер нагороди", id="number-meed")
                     with Horizontal(classes="row"):
-                        yield Label("Вручено дата:")
-                        yield Input(placeholder="РРРР-ММ-ДД", id="handover-date")
-                        yield Label("Вручено (особа/ID):")
-                        yield Input(id="handover-name")
+                        yield Input(placeholder="Вручено дата (РРРР-ММ-ДД)", id="handover-date")
+                        yield Input(placeholder="Вручено (особа/ID)", id="handover-name")
                         yield Checkbox("Є протокол", id="protok-handing")
 
                 with Vertical(id="meed-image-col"):
@@ -219,19 +211,16 @@ class KartkaTab(VerticalScroll):
                     else:
                         yield Static("Зображення відсутнє", id="award-image")
 
-            # Кіллер-фіча: статус зв'язку та кнопка переходу до подання
-            with Horizontal(classes="row", id="meed-link-action-row"):
-                yield Static("Пов'язане подання: Немає", id="meed-linked-info")
-                yield Button("🔗 Перейти до подання", id="goto-pres-btn", variant="default")
-
-        with Horizontal(classes="row"):
+             
+        with Horizontal(classes="row", id="card-actions-row"):
             yield Select(
-                [("⌦ Видалити", "0"), ("Особу", "1"), ("Подання", "2"), ("Нагородження", "3")],
+                [("⌦  Видалити", "0"), ("Особу", "1"), ("Подання", "2"), ("Нагородження", "3")],
                 id="delete-select",
                 value="0",
             )
             yield Button("ЗБЕРЕГТИ", variant="primary", id="save-btn")
             yield Button("ОЧИСТИТИ", id="clear-btn")
+
 
     def on_mount(self) -> None:
         self.show_card_screen("pres")
@@ -332,13 +321,17 @@ class KartkaTab(VerticalScroll):
                     break
 
             image_widget = self.query_one("#award-image")
-            if image_data:
+            
+            # Определяем, какую картинку показывать: награды или дефолтную (заглушку)
+            target_image_data = image_data if image_data else self.default_award_image_bytes
+
+            if target_image_data:
                 if HAS_TEXTUAL_IMAGE and isinstance(image_widget, Image):
                     try:
-                        if isinstance(image_data, str):
-                            binary_data = base64.b64decode(image_data)
+                        if isinstance(target_image_data, str):
+                            binary_data = base64.b64decode(target_image_data)
                         else:
-                            binary_data = image_data
+                            binary_data = target_image_data
                         image_widget.image = BytesIO(binary_data)
                     except Exception as e:
                         image_widget.image = None
@@ -349,6 +342,69 @@ class KartkaTab(VerticalScroll):
                     image_widget.image = None
                 elif isinstance(image_widget, Static):
                     image_widget.update("Зображення нагороди відсутнє")
+
+
+    def fill_meed_fields(self, list_index: int) -> None:
+        if list_index < 0 or list_index >= len(self.meed_list):
+            return
+        item = self.meed_list[list_index]
+        raw = item["raw_data"]
+        self.current_meed_id = raw[13]
+        
+        award_select = self.query_one("#award-select", Select)
+        if raw[12] is not None:
+            award_select.value = raw[12]
+        else:
+            award_select.clear()
+            
+        self.query_one("#award-basis", Input).value = str(raw[3] or "")
+        self.query_one("#award-date", Input).value = str(raw[2] or "")
+        self.query_one("#meed-dead", Checkbox).value = bool(raw[14])
+        self.query_one("#consing-n", Input).value = str(raw[7] or "")
+        self.query_one("#number-meed", Input).value = str(raw[4] or "")
+        self.query_one("#handover-date", Input).value = str(raw[5] or "")
+        handover = str(raw[6] or "")
+        self.query_one("#protok-handing", Checkbox).value = handover.endswith("$")
+        self.query_one("#handover-name", Input).value = handover[:-1] if handover.endswith("$") else handover
+
+        # Зв'язок із поданням
+        linked_pres_index = next((i for i, p in enumerate(self.presentations_list) if p[7] == self.current_meed_id), None)
+        goto_pres_btn = self.query_one("#goto-pres-btn", Button)
+        
+        if linked_pres_index is not None:
+            p = self.presentations_list[linked_pres_index]
+            goto_pres_btn.label = f"🔗 Подання №{p[0] or 'б/н'}"
+            goto_pres_btn.styles.display = "block"
+        else:
+            goto_pres_btn.styles.display = "none"
+
+        image_widget = self.query_one("#award-image")
+        award_name = award_select.value
+        image_data = None
+        for award_dict in self.awards_data.values():
+            details = award_dict.get(award_name)
+            if details:
+                image_data = details.get("image")
+                break
+        
+        if image_data:
+            if HAS_TEXTUAL_IMAGE and isinstance(image_widget, Image):
+                try:
+                    if isinstance(image_data, str):
+                        binary_data = base64.b64decode(image_data)
+                    else:
+                        binary_data = image_data
+                    image_widget.image = BytesIO(binary_data)
+                except Exception as e:
+                    image_widget.image = None
+            elif isinstance(image_widget, Static):
+                image_widget.update("Зображення є в базі.")
+        else:
+            if HAS_TEXTUAL_IMAGE and isinstance(image_widget, Image):
+                image_widget.image = None
+            elif isinstance(image_widget, Static):
+                image_widget.update("Зображення нагороди відсутнє")
+
 
     def on_person_selected(self, person_id) -> None:
         if person_id is None:
@@ -442,69 +498,6 @@ class KartkaTab(VerticalScroll):
             unlink.add_class("hidden")
             goto_meed_btn.styles.display = "none"
 
-    def fill_meed_fields(self, list_index: int) -> None:
-        if list_index < 0 or list_index >= len(self.meed_list):
-            return
-        item = self.meed_list[list_index]
-        raw = item["raw_data"]
-        self.current_meed_id = raw[13]
-        
-        award_select = self.query_one("#award-select", Select)
-        if raw[12] is not None:
-            award_select.value = raw[12]
-        else:
-            award_select.clear()
-            
-        self.query_one("#award-basis", Input).value = str(raw[3] or "")
-        self.query_one("#award-date", Input).value = str(raw[2] or "")
-        self.query_one("#meed-dead", Checkbox).value = bool(raw[14])
-        self.query_one("#consing-n", Input).value = str(raw[7] or "")
-        self.query_one("#number-meed", Input).value = str(raw[4] or "")
-        self.query_one("#handover-date", Input).value = str(raw[5] or "")
-        handover = str(raw[6] or "")
-        self.query_one("#protok-handing", Checkbox).value = handover.endswith("$")
-        self.query_one("#handover-name", Input).value = handover[:-1] if handover.endswith("$") else handover
-
-        # Зв'язок із поданням для кіллер-фічі
-        linked_pres_index = next((i for i, p in enumerate(self.presentations_list) if p[7] == self.current_meed_id), None)
-        info_widget = self.query_one("#meed-linked-info", Static)
-        goto_pres_btn = self.query_one("#goto-pres-btn", Button)
-        
-        if linked_pres_index is not None:
-            p = self.presentations_list[linked_pres_index]
-            info_widget.update(f"🔗 Пов'язано з поданням №{p[0] or 'б/н'} від {p[1] or '—'}")
-            goto_pres_btn.styles.display = "block"
-        else:
-            info_widget.update("🔗 Пов'язане подання відсутнє")
-            goto_pres_btn.styles.display = "none"
-
-        image_widget = self.query_one("#award-image")
-        award_name = award_select.value
-        image_data = None
-        for award_dict in self.awards_data.values():
-            details = award_dict.get(award_name)
-            if details:
-                image_data = details.get("image")
-                break
-        
-        if image_data:
-            if HAS_TEXTUAL_IMAGE and isinstance(image_widget, Image):
-                try:
-                    if isinstance(image_data, str):
-                        binary_data = base64.b64decode(image_data)
-                    else:
-                        binary_data = image_data
-                    image_widget.image = BytesIO(binary_data)
-                except Exception as e:
-                    image_widget.image = None
-            elif isinstance(image_widget, Static):
-                image_widget.update("Зображення є в базі.")
-        else:
-            if HAS_TEXTUAL_IMAGE and isinstance(image_widget, Image):
-                image_widget.image = None
-            elif isinstance(image_widget, Static):
-                image_widget.update("Зображення нагороди відсутнє")
-
     def on_inn_focus_lost(self) -> None:
         inn_val = self.query_one("#inn", Input).value
         result = is_valid_INN(inn_val)
@@ -562,11 +555,20 @@ class KartkaTab(VerticalScroll):
         self.query_one("#handover-name", Input).value = ""
         self.query_one("#protok-handing", Checkbox).value = False
         self.query_one("#goto-pres-btn", Button).styles.display = "none"
-        self.query_one("#meed-linked-info", Static).update("Пов'язане подання: Немає")
         
         image_widget = self.query_one("#award-image")
         if HAS_TEXTUAL_IMAGE and isinstance(image_widget, Image):
-            image_widget.image = None
+            if self.default_award_image_bytes:
+                try:
+                    if isinstance(self.default_award_image_bytes, str):
+                        binary_data = base64.b64decode(self.default_award_image_bytes)
+                    else:
+                        binary_data = self.default_award_image_bytes
+                    image_widget.image = BytesIO(binary_data)
+                except Exception:
+                    image_widget.image = None
+            else:
+                image_widget.image = None
         elif isinstance(image_widget, Static):
             image_widget.update("Зображення нагороди відсутнє")
 

@@ -46,6 +46,93 @@ Footer {
 /*              С Т И Л И   П О    К О М П О Н Е Н Т А М                     */
 /* ========================================================================= */
 
+
+
+/* --- main_textual.py --- */
+LoginScreen { 
+    align: center middle; 
+}
+
+#login-box { 
+    width: auto; 
+    height: auto; 
+    padding: 1 2; 
+    border: round $accent; 
+    background: $surface; 
+}
+
+#login-title { 
+    margin: 1;
+    color: $accent;
+}
+
+#db-path { 
+    margin: 1; 
+}
+
+#password { 
+    margin: 1; 
+}
+
+#login-error { 
+    color: $error; 
+    height: auto; 
+}
+
+
+
+
+/* --- search_tab_textual.py Вкладка пошуку --- */
+SearchTab {
+    height: 1fr;
+}
+
+#search-toolbar {
+    height: 3;
+    min-height: 3;
+    margin-bottom: 1;
+}
+
+#search-body {
+    height: 1fr;
+    min-height: 0;
+}
+
+#search-results-scroll {
+    height: 1fr;
+    min-height: 0;
+    margin-bottom: 1;
+}
+
+#search-results {
+    height: auto;
+}
+
+#search-images {
+    layout: horizontal;
+    height: 10;
+    width: 1fr;
+    overflow-x: auto;
+    overflow-y: hidden;
+}
+
+.search-award-image-card {
+    width: 20;
+    min-width: 20;
+    height: 9;
+    align: center top;
+}
+
+.award-image {
+    width: 18;
+    height: 8;
+}
+
+
+
+
+
+
 /* --- award_graph_modal.py --- */
 AwardGraphScreen {
     align: center middle;
@@ -101,7 +188,7 @@ KartkaTab {
 KartkaTab .box {
     height: auto;
     border: round $panel;
-    padding: 0 1;
+    padding: 0 0;
     margin-bottom: 0;
     background: $surface;
 }
@@ -207,7 +294,8 @@ KartkaTab TextArea#pres-text {
 /* Перемикання між поданням і нагородженням */
 #card-screen-switch {
     height: auto;
-    margin: 0;
+    margin-top: 0;
+    margin-bottom: 0;
 }
 
 #card-screen-switch Button {
@@ -215,10 +303,12 @@ KartkaTab TextArea#pres-text {
     margin: 0;
 }
 
+
 /* Нижня панель дій */
 #card-actions-row {
     height: auto;
-    margin: 0;
+    margin-top: 1; 
+    margin-bottom: 0;
     align: left middle;
 }
 
@@ -262,6 +352,20 @@ KartkaTab #clear-btn {
     content-align: center middle;
 }
 
+
+
+
+ModalScreen {
+    align: center middle; /* Выравнивание модалки по центру экрана */
+}
+
+#link-box {
+    width: 60;   /* Фиксированная ширина окна в символах (или задайте в процентах, например: width: 50%) */
+    height: auto; /* Высота подстраивается под содержимое */
+    border: heavy $accent; /* Рамка (цвет по вкусу) */
+    background: $surface;  /* Цвет фона модального окна */
+    padding: 1 2;          /* Внутренние отступы */
+}
 
 
 
@@ -408,43 +512,6 @@ DovidnykTab {
 
 
 
-/* --- main_textual.py --- */
-LoginScreen { 
-    align: center middle; 
-}
-
-#login-box { 
-    width: auto; 
-    height: auto; 
-    padding: 1 2; 
-    border: round $accent; 
-    background: $surface; 
-}
-
-#login-title { 
-    margin: 1;
-    color: $accent;
-}
-
-#db-path { 
-    margin: 1; 
-}
-
-#password { 
-    margin: 1; 
-}
-
-#login-error { 
-    color: $error; 
-    height: auto; 
-}
-
-
-
-
-
-
-
 /* --- text_panel_textual.py --- */
 TextPanel { 
     height: 1fr; 
@@ -459,7 +526,8 @@ TextPanel {
 }
 
 #text-results-row { 
-    height: 1fr; 
+    height: 1fr;
+    margin: 1 0 0 0;
 }
 
 #text-presentation-list { 
@@ -477,53 +545,181 @@ TextPanel {
 
 
 
+/* Стилі для вкладки SQL */
 
-
-
-/* --- search_tab_textual.py Вкладка пошуку --- */
-SearchTab {
-    height: 1fr;
+#tab-sql Vertical {
+    padding: 1 2;
+    height: 100%;
 }
 
-#search-toolbar {
-    height: 3;
-    min-height: 3;
+#tab-sql Label {
+    margin-bottom: 1;
+    color: $text-muted;
+}
+
+#sql-input {
+    height: 10;
+    margin-bottom: 1;
+    border: solid $panel;
+}
+
+#sql-input:focus {
+    border: solid $primary;
+}
+
+#tab-sql Horizontal {
+    height: auto;
+    margin-bottom: 1;
+    align: left middle;
+}
+
+#tab-sql Horizontal Button {
+    margin-right: 1;
+}
+
+#sql-result {
+    height: 1fr;
+    border: solid $panel;
+}
+
+
+
+
+/* Стилі для вкладки ЗАКОНИ та модального вікна редагування */
+
+.laws-container {
+    padding: 1 2;
+    height: 100%;
+}
+
+.laws-container .section-title {
+    text-style: bold;
+    color: $text-muted;
     margin-bottom: 1;
 }
 
-#search-body {
+#laws-table {
     height: 1fr;
-    min-height: 0;
-}
-
-#search-results-scroll {
-    height: 1fr;
-    min-height: 0;
+    border: solid $panel;
     margin-bottom: 1;
 }
 
-#search-results {
+.laws-buttons {
+    height: auto;
+    align: right middle;
+}
+
+.laws-buttons Button {
+    margin-left: 1;
+}
+
+/* Модальне вікно редагування закону */
+LawEditScreen {
+    align: center middle;
+}
+
+#law-edit-box {
+    width: 60;
+    height: auto;
+    background: $surface;
+    border: thick $primary;
+    padding: 1 2;
+}
+
+#law-edit-title {
+    text-style: bold;
+    text-align: center;
+    margin-bottom: 1;
+    color: $primary;
+}
+
+#law-edit-box Label {
+    margin-top: 1;
+    color: $text-muted;
+}
+
+#law-edit-box Input {
+    margin-top: 0;
+}
+
+#law-edit-error {
+    color: $error;
+    margin-top: 1;
+}
+
+#law-edit-box Horizontal {
+    margin-top: 2;
+    align: right middle;
     height: auto;
 }
 
-#search-images {
-    layout: horizontal;
-    height: 10;
-    width: 1fr;
-    overflow-x: auto;
-    overflow-y: hidden;
-}
-
-.search-award-image-card {
-    width: 20;
-    min-width: 20;
-    height: 9;
-    align: center top;
-}
-
-.award-image {
-    width: 18;
-    height: 8;
+#law-edit-box Horizontal Button {
+    margin-left: 1;
 }
 
 
+
+/* Стилі для вкладки ПРО */
+
+.about-container {
+    padding: 1 2;
+    height: 100%;
+}
+
+.about-info-pane {
+    width: 45%;
+    height: 100%;
+    background: $surface;
+    border: solid $panel;
+    padding: 2;
+    margin-right: 2;
+}
+
+.about-header {
+    text-style: bold;
+    color: $primary;
+    text-align: center;
+    margin-bottom: 2;
+}
+
+.about-text {
+    color: $foreground;
+}
+
+.about-game-pane {
+    width: 55%;
+    height: 100%;
+    background: $surface;
+    border: solid $panel;
+    padding: 1 2;
+}
+
+.checkers-title {
+    text-style: bold;
+    color: $warning;
+    text-align: center;
+    margin-bottom: 1;
+}
+
+#checkers-board-view {
+    text-align: center;
+    margin-bottom: 1;
+}
+
+#checkers-log {
+    height: 1fr;
+    border: solid $boost;
+    background: $background;
+    margin-bottom: 1;
+}
+
+.checkers-buttons {
+    margin: 1 0 0 0;
+    height: auto;
+    align: center middle;
+}
+
+.checkers-buttons Button {
+    margin-right: 1;
+
+}

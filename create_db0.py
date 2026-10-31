@@ -7,7 +7,6 @@ import io
 import os
 from PIL import Image
 from sqlcipher3 import dbapi2 as sqlite3 
-import wx
 import base64      
 
 # ---------------------------------- СЮДА НЕ ЛЕЗТЬ ----------------------------------------
@@ -208,8 +207,6 @@ def create_database(database_file_path, passwd):
 
         # сохраняем и закриваем
         db.commit()
-
-    wx.MessageBox(f"Нова база даних створена. Пароль {passwd}", "Увага", wx.OK | wx.ICON_ERROR)
     
     return True
 

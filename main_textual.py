@@ -7,11 +7,6 @@ import io
 import sys
 from pathlib import Path
 
-# Дозволяє використовувати оригінальні config.py/create_db0.py з каталогу original/.
-_ORIGINAL_DIR = Path(__file__).resolve().parent / "original"
-if _ORIGINAL_DIR.is_dir() and str(_ORIGINAL_DIR) not in sys.path:
-    sys.path.insert(0, str(_ORIGINAL_DIR))
-
 from sqlcipher3 import dbapi2 as sqlite3
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
@@ -24,16 +19,12 @@ from textual.widgets import (
 
 from config import DATABASE_FILE_PATH, MASTERKEY, TITLE_PROG, VERSION
 
-_PROJECT_DIR = str(Path(__file__).resolve().parent)
-if _PROJECT_DIR in sys.path:
-    sys.path.remove(_PROJECT_DIR)
-sys.path.insert(0, _PROJECT_DIR)
-
 from dovidnyk_textual import DovidnykTab
 from search_tab_textual import SearchTab
 from kartka_textual import KartkaTab
 from text_panel_textual import TextPanel
-
+from laws_textual import LawsTab, LawEditScreen
+from checkers_textual import CheckersWidget
 
 def connect_database(path: str, password: str):
     """Відкриває SQLCipher-базу в режимі сумісності з наявною БД."""
@@ -103,6 +94,7 @@ class LoginScreen(ModalScreen[str | None]):
                 if not create_database(self.db_path, password):
                     raise RuntimeError("Не вдалося створити базу даних.")
                 self.db_exists = Path(self.db_path).is_file()
+                self.notify(f"Нова база даних успішно створена!", severity="information", timeout=5)
 
             conn, cur = connect_database(self.db_path, password)
             cur.close()
@@ -120,7 +112,7 @@ class AwardsTextualApp(App):
     SUB_TITLE = f"Textual port · {VERSION}"
     BINDINGS = [
         ("ctrl+q", "quit", "Вихід"),
-        ("f1", "toggle_theme", "Тема світла/темна"),
+        ("f6", "toggle_theme", "Перемкнути світлу/темну тему"),
     ]
 
 
@@ -163,15 +155,11 @@ class AwardsTextualApp(App):
                     yield Static("Ще не перенесено з wxPython.", classes="centered-text")
             with TabPane("ТЕКСТ", id="tab-text"):
                 yield TextPanel(id="text-panel")
-            with TabPane("ВЕБ-ПОШУК", id="tab-web"):
-                with Vertical(classes="centered-pane"):
-                    yield Static("Ще не перенесено з wxPython.", classes="centered-text")
             with TabPane("НАЛАШТУВАННЯ", id="tab-settings"):
                 with Vertical(classes="centered-pane"):
                     yield Static("Ще не перенесено з wxPython.", classes="centered-text")
             with TabPane("ЗАКОНИ", id="tab-laws"):
-                with Vertical(classes="centered-pane"):
-                    yield Static("Ще не перенесено з wxPython.", classes="centered-text")
+                yield LawsTab(id="laws-tab") 
             with TabPane("SQL", id="tab-sql"):
                 with Vertical():
                     yield Label("SQL-запит (Ctrl+Enter — виконати)")
@@ -181,11 +169,21 @@ class AwardsTextualApp(App):
                         yield Button("EXPLAIN", id="sql-explain")
                         yield Button("CSV", id="sql-csv")
                     yield DataTable(id="sql-result", cursor_type="cell")
-            
             with TabPane("ПРО", id="tab-about"):
-                with Vertical(classes="centered-pane"):
-                    yield Static(f"{TITLE_PROG}\nВерсія {VERSION}\nTextual-міграція.", classes="centered-text")
-        
+                with Horizontal(classes="about-container"):
+                    with Vertical(classes="about-info-pane"):
+                        yield Label("AWARDS 53", classes="about-header")
+                        yield Static(
+                            f"Програма: [bold]{TITLE_PROG}[/bold]\n"
+                            f"Версія: [bold]{VERSION}[/bold]\n"
+                            "Архітектура: [italic]Textual Terminal UI[/italic]\n\n"
+                            "Система призначена для ведення обліку нагород, "
+                            "роботи з базами даних SQLCipher та нормативними актами.\n\n"
+                            "(c) 2026. Холодов О.В. [git/suozg]",
+                            classes="about-text"
+                        )
+                    with Vertical(classes="about-game-pane"):
+                        yield CheckersWidget(id="checkers-game")
         yield Static("Тема: темна Gruvbox · F12 — перемкнути тему", id="status")
         yield Footer()
 
@@ -195,6 +193,7 @@ class AwardsTextualApp(App):
             self.query_one("#search-tab", SearchTab).set_database(self.conn, self.cursor)
             self.query_one("#kartka-tab", KartkaTab).set_database(self.conn, self.cursor)
             self.query_one("#text-panel", TextPanel).set_database(self.conn, self.cursor)
+            self.query_one("#laws-tab", LawsTab).set_database(self.conn, self.cursor)
         except Exception as exc:
             self.notify(f"Помилка підключення до БД: {exc}", severity="error", timeout=10)
             self.exit()
@@ -235,7 +234,6 @@ class AwardsTextualApp(App):
     def action_tab_3(self) -> None: self._activate("tab-reference")
     def action_tab_4(self) -> None: self._activate("tab-reports")
     def action_tab_5(self) -> None: self._activate("tab-text")
-    def action_tab_6(self) -> None: self._activate("tab-web")
     def action_tab_7(self) -> None: self._activate("tab-settings")
     def action_tab_8(self) -> None: self._activate("tab-laws")
     def action_tab_9(self) -> None: self._activate("tab-sql")
