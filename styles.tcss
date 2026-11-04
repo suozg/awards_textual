@@ -46,6 +46,47 @@ Footer {
 /*              С Т И Л И   П О    К О М П О Н Е Н Т А М                     */
 /* ========================================================================= */
 
+/* ───────── Splash Screen ───────── */
+
+SplashScreen {
+    align: center middle;
+    background: $background;
+}
+
+.splash-container {
+    width: 70;
+    height: 17;
+    padding: 2 4;
+    border: round $primary;
+    background: $surface;
+    align: center middle;
+}
+
+.splash-title {
+    width: 100%;
+    height: 3;
+    content-align: center middle;
+    text-style: bold;
+    color: $primary;
+}
+
+.splash-author {
+    width: 100%;
+    height: 2;
+    content-align: center middle;
+    color: $secondary;
+}
+
+.splash-status {
+    width: 100%;
+    height: 3;
+    margin-top: 2;
+    padding: 1;
+    content-align: center middle;
+    color: $text-muted;
+    border-top: solid $panel;
+}
+
 
 
 /* --- main_textual.py --- */
@@ -722,4 +763,211 @@ LawEditScreen {
 .checkers-buttons Button {
     margin-right: 1;
 
+}
+
+
+
+ZvitTab {
+    height: 1fr;
+    width: 1fr;
+    padding: 1;
+}
+
+#zvit-root {
+    height: 1fr;
+    width: 1fr;
+}
+
+#zvit-top-row,
+#zvit-middle-row,
+#zvit-award-row,
+#zvit-extra-row {
+    height: auto;
+    width: 1fr;
+    align: left middle;
+    margin-bottom: 1;
+}
+
+#zvit-top-row Input,
+#zvit-middle-row Input,
+#zvit-award-row Input,
+#zvit-extra-row Input,
+#zvit-middle-row Select,
+#zvit-award-row Select,
+#zvit-extra-row Select {
+    width: 1fr;
+    margin-right: 1;
+}
+
+.zvit-label {
+    width: auto;
+    margin-right: 1;
+    color: $text-muted;
+}
+
+.zvit-range-separator {
+    width: auto;
+    min-width: 2;
+    content-align: center middle;
+    color: $text-muted;
+}
+
+#zvit-table {
+    height: 1fr;
+    min-height: 12;
+    border: round $panel;
+    margin-top: 1;
+}
+
+#zvit-footer {
+    height: auto;
+    margin-top: 1;
+    padding: 0 1;
+    background: $boost;
+    color: $text-muted;
+}
+
+
+
+/* ===== SettingsTab ===== */
+
+SettingsTab {
+    height: 1fr;
+    width: 1fr;
+    padding: 1;
+    background: $background;
+}
+
+#settings-root {
+    height: 1fr;
+    width: 1fr;
+    padding: 0 1;
+}
+
+#settings-top-row {
+    height: auto;
+    width: 1fr;
+    margin-bottom: 1;
+    align: left top;
+}
+
+#settings-password-box,
+#settings-report-box,
+#settings-global-box,
+#settings-logo-box {
+    height: auto;
+    width: 1fr;
+    border: round $panel;
+    background: $surface;
+    padding: 1 2;
+    margin-bottom: 1;
+}
+
+#settings-password-side {
+    width: 32%;
+    min-width: 26;
+    margin-right: 1;
+}
+
+#settings-logo-box {
+    width: 1fr;
+}
+
+.settings-section-title {
+    text-style: bold;
+    color: $primary;
+    margin-bottom: 1;
+}
+
+.settings-row {
+    height: auto;
+    width: 1fr;
+    margin-bottom: 1;
+    align: left middle;
+}
+
+.settings-row > Input {
+    width: 1fr;
+    min-width: 12;
+    margin-right: 1;
+}
+
+.settings-row > Select {
+    width: 1fr;
+    min-width: 18;
+    margin-right: 1;
+}
+
+.settings-row > Button {
+    min-width: 15;
+    margin-right: 1;
+}
+
+.settings-label {
+    color: $text-muted;
+    width: auto;
+    min-width: 12;
+    margin-right: 1;
+}
+
+#settings-report-grid {
+    grid-size: 5 1;
+    grid-columns: 1fr 1fr 1fr 1fr 1fr;
+    grid-gutter: 1 1;
+    width: 1fr;
+    height: auto;
+    margin-top: 1;
+}
+
+#settings-report-grid Checkbox {
+    width: auto;
+    min-width: 12;
+    margin-right: 1;
+}
+
+#settings-status {
+    height: auto;
+    min-height: 3;
+    padding: 0 1;
+    background: $boost;
+    color: $text-muted;
+    margin-top: 1;
+}
+
+#settings-rank-select,
+#settings-unit-select {
+    width: 1fr;
+    min-width: 18;
+}
+
+#settings-rank-entry,
+#settings-unit-entry {
+    width: 1fr;
+    min-width: 20;
+}
+
+#settings-old-pass,
+#settings-new-pass,
+#settings-repeat-pass {
+    width: 1fr;
+    min-width: 12;
+}
+
+#settings-logo-path {
+    width: 1fr;
+    min-width: 24;
+}
+
+#settings-report-dir {
+    width: 1fr;
+    min-width: 20;
+}
+
+#settings-change-password,
+#settings-dir-save,
+#settings-save-report-cols,
+#settings-save-global,
+#settings-clear-global,
+#settings-logo-save {
+    min-width: 16;
 }

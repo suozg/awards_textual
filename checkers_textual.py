@@ -52,7 +52,7 @@ class CheckersWidget(Horizontal):
 
     def on_mount(self) -> None:
         self.update_view()
-        self.query_one("#checkers-input", Input).focus()
+        self.query_one("#checkers-input", Input)
 
     def save_game(self, board, turn):
         data = {"board": board, "turn": turn}

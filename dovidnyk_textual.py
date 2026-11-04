@@ -125,7 +125,7 @@ class DovidnykTab(Vertical):
     def on_mount(self) -> None:
         self._load_category_meta()
         self._show_panel("empty-panel")
-        self._load_data()
+        #self._load_data()
 
     def set_database(self, conn, cursor) -> None:
         self.conn, self.cursor = conn, cursor
@@ -263,14 +263,16 @@ class DovidnykTab(Vertical):
                 with PILImage.open(BytesIO(image_data)) as source:
                     source.load()
                     source = source.convert("RGB")
-                    fitted = ImageOps.contain(source, (640, 220))
-                    # Притискаємо зображення чітко до лівого краю (x = 0)
-                    display_image = PILImage.new("RGB", (640, 220), (24, 24, 24))
-                    x = 0 
-                    y = (220 - fitted.height) // 2
+                    # размер холста 
+                    target_width, target_height = 300, 440
+                    fitted = ImageOps.contain(source, (target_width, target_height))
+                    display_image = PILImage.new("RGB", (target_width, target_height), (24, 24, 24))
+                    x = (target_width - fitted.width) // 2
+                    y = (target_height - fitted.height) // 2
                     display_image.paste(fitted, (x, y))
-                preview.image = display_image
-                status = "Зображення завантажено з бази даних."
+                    
+                preview.image = display_image 
+                status = "Зображення нагороди"
             except Exception as exc:
                 preview.image = None
                 status = f"Не вдалося показати зображення: {exc}"

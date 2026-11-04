@@ -1,16 +1,14 @@
 """Textual-порт AWARDS 53."""
 from __future__ import annotations
-
 import argparse
 import csv
-import io
 import sys
 from pathlib import Path
 
 from sqlcipher3 import dbapi2 as sqlite3
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
-from textual.screen import ModalScreen
+from textual.screen import ModalScreen, Screen
 from textual.theme import Theme
 from textual.widgets import (
     Button, DataTable, Footer, Input, Label, Static,
@@ -25,10 +23,12 @@ from kartka_textual import KartkaTab
 from text_panel_textual import TextPanel
 from laws_textual import LawsTab, LawEditScreen
 from checkers_textual import CheckersWidget
+from zvity_textual import ZvitTab
+from setuptab_textual import SettingsTab
 
 def connect_database(path: str, password: str):
     """Відкриває SQLCipher-базу в режимі сумісності з наявною БД."""
-    conn = sqlite3.connect(path)
+    conn = sqlite3.connect(path, check_same_thread=False)
     cur = conn.cursor()
     cur.execute(f"PRAGMA key = '{password.replace(chr(39), chr(39)*2)}';")
     cur.execute("PRAGMA cipher_compatibility = 3;")
@@ -45,8 +45,7 @@ def connect_database(path: str, password: str):
     conn.create_function("LOWER", 1, lambda value: str(value).lower())
     return conn, cur
 
-
-class LoginScreen(ModalScreen[str | None]):
+class LoginScreen(ModalScreen[tuple[str, object, object] | None]):
     """Діалог входу до бази даних."""
 
     def __init__(self, db_path: str, db_exists: bool):
@@ -84,63 +83,42 @@ class LoginScreen(ModalScreen[str | None]):
             self.query_one("#login-error", Static).update("Введіть пароль бази даних.")
             return
         try:
-            # Перевіряємо стан файлу саме під час входу, а не лише під час запуску.
             self.db_exists = Path(self.db_path).is_file()
             if self._creation_needed:
-                # Створюємо каталог, якщо це перший запуск із новим шляхом до БД.
                 Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
-                # Використовуємо штатну функцію створення схеми з проєкту.
                 from create_db0 import create_database
                 if not create_database(self.db_path, password):
                     raise RuntimeError("Не вдалося створити базу даних.")
                 self.db_exists = Path(self.db_path).is_file()
-                self.notify(f"Нова база даних успішно створена!", severity="information", timeout=5)
+                self.notify("Нова база даних успішно створена!", severity="information", timeout=5)
 
+            # Перевіряємо з'єднання одразу при введенні пароля
             conn, cur = connect_database(self.db_path, password)
-            cur.close()
-            conn.close()
             self._creation_needed = False
-            self.dismiss(password)
+            self.dismiss((password, conn, cur))
         except Exception as exc:
             self.query_one("#login-error", Static).update(f"Помилка: {exc}")
             self.query_one("#password", Input).focus()
 
 
-class AwardsTextualApp(App):
-    CSS_PATH = "styles.tcss" 
-    TITLE = TITLE_PROG
-    SUB_TITLE = f"Textual port · {VERSION}"
-    BINDINGS = [
-        ("ctrl+q", "quit", "Вихід"),
-        ("f6", "toggle_theme", "Перемкнути світлу/темну тему"),
-    ]
+class SplashScreen(Screen):
+    """Екран заставки з текстом по центру на час ініціалізації."""
+
+    def compose(self) -> ComposeResult:
+        with Vertical(classes="splash-container"):
+            yield Label("AWARDS 53", classes="splash-title")
+            yield Static("(c) Холодов О.В. [git/suozg]", classes="splash-author")
+            yield Static("Підготовка робочого середовища...", id="splash-status", classes="splash-status")
+
+    def update_status(self, text: str) -> None:
+        try:
+            self.query_one("#splash-status", Static).update(text)
+        except Exception:
+            pass
 
 
-    def __init__(self, db_path: str, password: str):
-        super().__init__()
-        self.db_path = db_path
-        self.password = password
-        self.conn = None
-        self.cursor = None
-        self.presentations = []
-        self._card_search_revision = -1
-        self._dovidnyk_loaded = False
-        self._theme_names = ("gruvbox-dark", "gruvbox-light")
-        self.register_theme(Theme(
-            name="gruvbox-dark", primary="#d79921", secondary="#83a598",
-            warning="#fabd2f", error="#fb4934", success="#b8bb26",
-            accent="#fe8019", foreground="#ebdbb2", background="#282828",
-            surface="#3c3836", panel="#504945", boost="#665c54", dark=True,
-            variables={"text-muted": "#a89984"},
-        ))
-        self.register_theme(Theme(
-            name="gruvbox-light", primary="#b57614", secondary="#689d6a",
-            warning="#d79921", error="#cc241d", success="#98971a",
-            accent="#d65d0e", foreground="#3c3836", background="#fbf1c7",
-            surface="#f2e5bc", panel="#ebdbb2", boost="#d5c4a1", dark=False,
-            variables={"text-muted": "#7c6f64"},
-        ))
-        self.theme = "gruvbox-dark"
+class MainScreen(Screen):
+    """Головний екран із вкладками (створюється лише після заставки)."""
 
     def compose(self) -> ComposeResult:
         with TabbedContent(initial="tab-search"):
@@ -151,13 +129,11 @@ class AwardsTextualApp(App):
             with TabPane("ДОВІДНИК", id="tab-reference"):
                 yield DovidnykTab(id="dovidnyk-tab")
             with TabPane("ЗВІТИ", id="tab-reports"):
-                with Vertical(classes="centered-pane"):
-                    yield Static("Ще не перенесено з wxPython.", classes="centered-text")
+                yield ZvitTab(id="zvity-panel")
             with TabPane("ТЕКСТ", id="tab-text"):
                 yield TextPanel(id="text-panel")
             with TabPane("НАЛАШТУВАННЯ", id="tab-settings"):
-                with Vertical(classes="centered-pane"):
-                    yield Static("Ще не перенесено з wxPython.", classes="centered-text")
+                yield SettingsTab(id="settings-tab")
             with TabPane("ЗАКОНИ", id="tab-laws"):
                 yield LawsTab(id="laws-tab") 
             with TabPane("SQL", id="tab-sql"):
@@ -184,68 +160,208 @@ class AwardsTextualApp(App):
                         )
                     with Vertical(classes="about-game-pane"):
                         yield CheckersWidget(id="checkers-game")
-        yield Static("Тема: темна Gruvbox · F12 — перемкнути тему", id="status")
         yield Footer()
 
-    def on_mount(self) -> None:
-        try:
-            self.conn, self.cursor = connect_database(self.db_path, self.password)
-            self.query_one("#search-tab", SearchTab).set_database(self.conn, self.cursor)
-            self.query_one("#kartka-tab", KartkaTab).set_database(self.conn, self.cursor)
-            self.query_one("#text-panel", TextPanel).set_database(self.conn, self.cursor)
-            self.query_one("#laws-tab", LawsTab).set_database(self.conn, self.cursor)
-        except Exception as exc:
-            self.notify(f"Помилка підключення до БД: {exc}", severity="error", timeout=10)
-            self.exit()
 
-    def on_tabbed_content_tab_activated(self, event: TabbedContent.TabActivated) -> None:
-        if event.pane.id == "tab-reference" and not self._dovidnyk_loaded:
-            try:
-                self.query_one("#dovidnyk-tab", DovidnykTab).set_database(self.conn, self.cursor)
-                self._dovidnyk_loaded = True
-            except Exception as exc:
-                self.notify(f"Не вдалося завантажити довідник: {exc}", severity="error", timeout=10)
-        elif event.pane.id == "tab-card":
-            self._sync_card_with_search()
+class AwardsTextualApp(App):
+    CSS_PATH = "styles.tcss" 
+    TITLE = TITLE_PROG
+    SUB_TITLE = f"Textual port · {VERSION}"
+    BINDINGS = [
+        ("ctrl+q", "quit", "Вихід"),
+        ("f6", "toggle_theme", "Перемкнути тему"),
+    ]
+
+    def __init__(self, db_path: str):
+        super().__init__()
+        self.db_path = db_path
+        self.password = None
+        self.conn = None
+        self.cursor = None
+        self.presentations = []
+        self._card_search_revision = -1
+        self._initialized_tabs = set()
+        self._theme_names = ("gruvbox-dark", "gruvbox-light")
+        self.register_theme(Theme(
+            name="gruvbox-dark", primary="#d79921", secondary="#83a598",
+            warning="#fabd2f", error="#fb4934", success="#b8bb26",
+            accent="#fe8019", foreground="#ebdbb2", background="#282828",
+            surface="#3c3836", panel="#504945", boost="#665c54", dark=True,
+            variables={"text-muted": "#a89984"},
+        ))
+        self.register_theme(Theme(
+            name="gruvbox-light", primary="#b57614", secondary="#689d6a",
+            warning="#d79921", error="#cc241d", success="#98971a",
+            accent="#d65d0e", foreground="#3c3836", background="#fbf1c7",
+            surface="#f2e5bc", panel="#ebdbb2", boost="#d5c4a1", dark=False,
+            variables={"text-muted": "#7c6f64"},
+        ))
+        self.theme = "gruvbox-dark"
+
+    def on_mount(self) -> None:
+        db_exists = Path(self.db_path).is_file()
+        
+        if MASTERKEY:
+            self.password = MASTERKEY
+            # Якщо є MASTERKEY, одразу показуємо заставку і запускаємо ініціалізацію
+            self.push_screen(SplashScreen())
+            self.run_worker(self._initialize_backend_task, thread=True)
+        else:
+            def handle_login(result):
+                if not result:
+                    self.exit()
+                    return
+                self.password, self.conn, self.cursor = result
+                # ПЕРШИЙ КРОК ЗАСТАВКИ: після успішного логіну показуємо SplashScreen
+                self.push_screen(SplashScreen())
+                # ДРУГИЙ КРОК: запускаємо фонову ініціалізацію
+                self.run_worker(self._initialize_backend_task, thread=True)
+
+            # Показуємо вікно логіну поверх порожнього дефолтного екрана
+            self.push_screen(LoginScreen(self.db_path, db_exists), handle_login)
+
+    def _initialize_backend_task(self) -> None:
+        try:
+            self.call_from_thread(
+                self._update_splash_status,
+                "Підключення до бази даних SQLCipher...",
+            )
+
+            # Якщо з'єднання ще не відкрите (наприклад, при заданому MASTERKEY),
+            # відкриваємо його у фоновому потоці.
+            if self.conn is None:
+                self.conn, self.cursor = connect_database(
+                    self.db_path, self.password
+                )
+
+            self.call_from_thread(
+                self._update_splash_status,
+                "Підготовка вкладки пошуку...",
+            )
+            self.call_from_thread(self._transition_to_main_screen)
+
+        except Exception as exc:
+            self.call_from_thread(self._handle_init_error, str(exc))
+
+    def _update_splash_status(self, message: str) -> None:
+        if isinstance(self.screen, SplashScreen):
+            self.screen.update_status(message)
+
+    def _transition_to_main_screen(self) -> None:
+        self.switch_screen(MainScreen())
+
+        # Спочатку Textual має завершити compose/mount MainScreen.
+        self.call_after_refresh(self._initialize_search_tab)
+
+    def _initialize_search_tab(self) -> None:
+        try:
+            main_screen = self.screen
+            if not isinstance(main_screen, MainScreen):
+                raise RuntimeError("Основний екран ще не активний.")
+
+            search_tab = main_screen.query_one("#search-tab", SearchTab)
+            search_tab.set_database(self.conn, self.cursor)
+            self._initialized_tabs.add("tab-search")
+
+        except Exception as exc:
+            self.notify(
+                f"Помилка ініціалізації пошуку: {exc}",
+                severity="error",
+                timeout=10,
+            )
+
+    def on_tabbed_content_tab_activated(
+        self, event: TabbedContent.TabActivated
+    ) -> None:
+        tab_id = event.pane.id
+
+        if tab_id in self._initialized_tabs:
+            if tab_id == "tab-card":
+                self._sync_card_with_search()
+            return
+
+        self.call_after_refresh(self._initialize_tab, tab_id)
+
+    def _initialize_tab(self, tab_id: str) -> None:
+        tab_setup = {
+            "tab-card": ("#kartka-tab", KartkaTab),
+            "tab-reference": ("#dovidnyk-tab", DovidnykTab),
+            "tab-reports": ("#zvity-panel", ZvitTab),
+            "tab-text": ("#text-panel", TextPanel),
+            "tab-settings": ("#settings-tab", SettingsTab),
+            "tab-laws": ("#laws-tab", LawsTab),
+        }
+
+        if tab_id in self._initialized_tabs:
+            return
+
+        if tab_id not in tab_setup:
+            return
+
+        selector, widget_type = tab_setup[tab_id]
+
+        try:
+            main_screen = self.screen
+
+            if not isinstance(main_screen, MainScreen):
+                return
+
+            widget = main_screen.query_one(selector, widget_type)
+            widget.set_database(self.conn, self.cursor)
+
+            if tab_id == "tab-reference":
+                widget._load_data()
+
+            self._initialized_tabs.add(tab_id)
+
+            if tab_id == "tab-card":
+                self._sync_card_with_search()
+
+        except Exception as exc:
+            self.notify(
+                f"Не вдалося ініціалізувати вкладку: {exc}",
+                severity="error",
+                timeout=10,
+            )
 
     def _sync_card_with_search(self) -> None:
-        search_tab = self.query_one("#search-tab", SearchTab)
-        revision = search_tab.get_search_revision()
-        if revision == self._card_search_revision:
-            return
+        try:
+            main_screen = self.screen
 
-        results, source = search_tab.get_latest_search_results()
-        if results is None:
-            return
+            if not isinstance(main_screen, MainScreen):
+                return
 
-        self._card_search_revision = revision
-        self.query_one("#kartka-tab", KartkaTab).populate_and_load_search_results(
-            results, source
-        )
+            search_tab = main_screen.query_one("#search-tab", SearchTab)
+            revision = search_tab.get_search_revision()
 
-    def _move_tab(self, step: int) -> None:
-        tabs = self.query_one(TabbedContent)
-        panes = list(tabs.query(TabPane))
-        current = next((i for i, pane in enumerate(panes) if pane.id == tabs.active), 0)
-        tabs.active = panes[(current + step) % len(panes)].id
+            if revision == self._card_search_revision:
+                return
 
-    def action_tab_1(self) -> None: self._activate("tab-search")
-    def action_tab_2(self) -> None: self._activate("tab-card")
-    def action_tab_3(self) -> None: self._activate("tab-reference")
-    def action_tab_4(self) -> None: self._activate("tab-reports")
-    def action_tab_5(self) -> None: self._activate("tab-text")
-    def action_tab_7(self) -> None: self._activate("tab-settings")
-    def action_tab_8(self) -> None: self._activate("tab-laws")
-    def action_tab_9(self) -> None: self._activate("tab-sql")
-    def action_tab_10(self) -> None: self._activate("tab-about")
+            results, source = search_tab.get_latest_search_results()
+
+            if results is None:
+                return
+
+            self._card_search_revision = revision
+
+            main_screen.query_one(
+                "#kartka-tab", KartkaTab
+            ).populate_and_load_search_results(results, source)
+
+        except Exception as exc:
+            self.notify(
+                f"Помилка синхронізації картки: {exc}",
+                severity="error",
+                timeout=10,
+            )
 
     def action_toggle_theme(self) -> None:
         self.theme = "gruvbox-light" if self.theme == "gruvbox-dark" else "gruvbox-dark"
         theme_label = "світла Gruvbox" if self.theme == "gruvbox-light" else "темна Gruvbox"
-        self.query_one("#status", Static).update(f"Тема: {theme_label} (F12 — перемкнути)")
-
-    def _activate(self, tab_id: str) -> None:
-        self.query_one(TabbedContent).active = tab_id
+        try:
+            self.query_one("#status", Static).update(f"Тема: {theme_label} (F12 — перемкнути)")
+        except Exception:
+            pass
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "search-button":
@@ -257,17 +373,13 @@ class AwardsTextualApp(App):
         elif event.button.id == "sql-csv":
             self.export_csv()
 
-    def on_text_area_changed(self, event: TextArea.Changed) -> None:
-        if event.text_area.id == "sql-input" and event.text_area.has_focus:
-            pass
-
     def execute_sql(self, explain: bool = False) -> None:
-        sql = self.query_one("#sql-input", TextArea).text.strip()
-        if not sql:
-            return
-        if explain:
-            sql = "EXPLAIN QUERY PLAN " + sql
         try:
+            sql = self.query_one("#sql-input", TextArea).text.strip()
+            if not sql:
+                return
+            if explain:
+                sql = "EXPLAIN QUERY PLAN " + sql
             self.cursor.execute(sql)
             table = self.query_one("#sql-result", DataTable)
             table.clear(columns=True)
@@ -282,16 +394,15 @@ class AwardsTextualApp(App):
             self.query_one("#status", Static).update("SQL: виконано")
         except Exception as exc:
             self.notify(f"SQL: {exc}", severity="error", timeout=10)
-            self.query_one("#status", Static).update("SQL: помилка")
 
     def export_csv(self) -> None:
-        table = self.query_one("#sql-result", DataTable)
-        if not table.columns:
-            self.notify("Немає результатів для експорту.", severity="warning")
-            return
-        from datetime import datetime
-        path = Path.cwd() / f"awards_sql_{datetime.now():%Y%m%d_%H%M%S}.csv"
         try:
+            table = self.query_one("#sql-result", DataTable)
+            if not table.columns:
+                self.notify("Немає результатів для експорту.", severity="warning")
+                return
+            from datetime import datetime
+            path = Path.cwd() / f"awards_sql_{datetime.now():%Y%m%d_%H%M%S}.csv"
             with path.open("w", newline="", encoding="utf-8-sig") as stream:
                 writer = csv.writer(stream)
                 writer.writerow([column.label.plain for column in table.columns.values()])
@@ -303,34 +414,24 @@ class AwardsTextualApp(App):
 
     def on_unmount(self) -> None:
         if self.cursor:
-            self.cursor.close()
+            try:
+                self.cursor.close()
+            except Exception:
+                pass
         if self.conn:
-            self.conn.close()
+            try:
+                self.conn.close()
+            except Exception:
+                pass
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="AWARDS 53")
     parser.add_argument("-c", default=DATABASE_FILE_PATH, help="Шлях до файлу бази даних")
     args = parser.parse_args()
-    db_exists = Path(args.c).is_file()
-    if MASTERKEY:
-        password = MASTERKEY
-        app = AwardsTextualApp(args.c, password)
-        app.run()
-        return
-    class LoginApp(App):
-        CSS_PATH = "styles.tcss"
-        def on_mount(self):
-            self.push_screen(LoginScreen(args.c, db_exists), self.got_password)
-        def got_password(self, password):
-            if password is None:
-                self.exit()
-            else:
-                self.exit(password)
-    login_app = LoginApp()
-    password = login_app.run()
-    if password:
-        AwardsTextualApp(args.c, password).run()
+    
+    app = AwardsTextualApp(args.c)
+    app.run()
 
 
 if __name__ == "__main__":
