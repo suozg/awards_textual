@@ -982,3 +982,19 @@ SettingsTab {
 #settings-logo-save {
     min-width: 16;
 }
+
+ReportSettingsModal {
+    align: center middle;
+}
+
+#report-settings-box {
+    width: 85%;
+    height: 90%;
+    padding: 1 2;
+    border: thick $primary;
+    background: $surface;
+}
+
+#report-settings-box > .settings-row:last-of-type {
+    margin-top: 1;
+}

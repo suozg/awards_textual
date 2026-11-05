@@ -8,7 +8,7 @@ import sqlite3
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.widgets import Button, Checkbox, Input, Label, Select, Static
-
+from textual.screen import ModalScreen
 from config import ALL_COLUMN_LABELS
 from database_logic_textual import get_units_and_ranks, get_service_settings_data, connect_to_database
 
@@ -28,6 +28,109 @@ class ServiceSettingsIndices:
     IMG_HOMER2 = 11
     LAST_TIME_CHANGES = 12
 
+
+class ReportSettingsModal(ModalScreen[bool]):
+    """Модальне вікно налаштувань звітів."""
+
+    def __init__(self, conn, report_tab=None):
+        super().__init__()
+        self.conn = conn
+        self.report_tab = report_tab
+        self.zvit_dir = ""
+        self.report_flags = [0] * 15
+        self._load_settings()
+
+    def _load_settings(self):
+        cursor = None
+        try:
+            if self.conn:
+                cursor = self.conn.cursor()
+                row = get_service_settings_data(cursor)
+                if row:
+                    if len(row) > ServiceSettingsIndices.ZVIT_DIR and row[ServiceSettingsIndices.ZVIT_DIR]:
+                        self.zvit_dir = str(row[ServiceSettingsIndices.ZVIT_DIR])
+                    if len(row) > ServiceSettingsIndices.ZVIT_FIELDS and row[ServiceSettingsIndices.ZVIT_FIELDS]:
+                        flags = [int(value) for value in str(row[ServiceSettingsIndices.ZVIT_FIELDS]).split(",")]
+                        self.report_flags = (flags + [0] * 15)[:15]
+        except (ValueError, TypeError) as exc:
+            self.notify(f"Некоректні налаштування колонок звіту: {exc}", severity="error")
+            self.report_flags = [0] * 15
+        except Exception as exc:
+            self.notify(f"Помилка завантаження налаштувань звітів: {exc}", severity="error")
+        finally:
+            if cursor:
+                cursor.close()
+
+    def compose(self) -> ComposeResult:
+        with VerticalScroll(id="report-settings-box"):
+            yield Label("Налаштування звітів", classes="settings-section-title")
+            yield Label("Місце збереження файлів EXCEL", classes="settings-label")
+            with Horizontal(classes="settings-row"):
+                yield Input(
+                    value=self.zvit_dir,
+                    placeholder="Шлях до папки звітів",
+                    id="settings-report-dir",
+                )
+
+            yield Label("Наповнення таблиць", classes="settings-label")
+            with Horizontal(id="settings-report-grid"):
+                for i in range(14):
+                    label = ALL_COLUMN_LABELS[i] if i < len(ALL_COLUMN_LABELS) else f"Колонка {i}"
+                    yield Checkbox(
+                        label,
+                        id=f"rep-col-{i}",
+                        value=self.report_flags[i] == 1,
+                    )
+
+                last_flag = self.report_flags[14]
+                yield Checkbox("РНОКПП", id="rep-rno", value=last_flag in (1, 3))
+                yield Checkbox("Дата народження", id="rep-dob", value=last_flag in (2, 3))
+
+            with Horizontal(classes="settings-row"):
+                yield Button("Зберегти", variant="primary", id="settings-save-report-cols")
+                yield Button("Закрити", id="report-settings-close")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "settings-save-report-cols":
+            self._save_settings()
+        elif event.button.id == "report-settings-close":
+            self.dismiss(False)
+
+    def _save_settings(self) -> None:
+        if not self.conn:
+            self.notify("База даних не підключена.", severity="error")
+            return
+
+        flags = [
+            "1" if self.query_one(f"#rep-col-{i}", Checkbox).value else "0"
+            for i in range(14)
+        ]
+
+        rno = self.query_one("#rep-rno", Checkbox).value
+        dob = self.query_one("#rep-dob", Checkbox).value
+        flags.append(str(3 if rno and dob else 1 if rno else 2 if dob else 0))
+
+        directory = self.query_one("#settings-report-dir", Input).value.strip()
+        cursor = None
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute(
+                "UPDATE service_ SET zvit_dir = ?, zvit_fields = ? WHERE id = 1",
+                (directory, ",".join(flags)),
+            )
+            self.conn.commit()
+
+            if self.report_tab and hasattr(self.report_tab, "refresh_tree"):
+                self.report_tab.refresh_tree()
+
+            self.notify("Налаштування звітів збережено.")
+            self.dismiss(True)
+        except Exception as exc:
+            self.conn.rollback()
+            self.notify(f"Помилка збереження налаштувань звітів: {exc}", severity="error")
+        finally:
+            if cursor:
+                cursor.close()
 
 class SettingsTab(VerticalScroll):
     """Вкладка «Налаштування» для Textual."""
@@ -86,33 +189,6 @@ class SettingsTab(VerticalScroll):
                         yield Input(placeholder="Шлях до зображення (*.png)", id="settings-logo-path")
                         yield Button("Зберегти лого", variant="primary", id="settings-logo-save")
 
-            # --- Блок налаштування звітів ---
-            with Vertical(id="settings-report-box"):
-                yield Label("Налаштування звітів", classes="settings-section-title")
-                yield Label("Місце збереження файлів EXCEL", classes="settings-label")
-                with Horizontal(classes="settings-row"):
-                    yield Input(value=self.zvit_dir or "", placeholder="Шлях до папки звітів", id="settings-report-dir")
-                
-                yield Label("Наповнення таблиць", classes="settings-label")
-                
-                # Сітка чекбоксів колонок
-                with Horizontal(id="settings-report-grid"):
-                    self._report_column_checkboxes = []
-                    for i in range(14):
-                        label_text = ALL_COLUMN_LABELS[i] if i < len(ALL_COLUMN_LABELS) else f"Колонка {i}"
-                        is_checked = i < len(self._selected_report_fields_flags) and self._selected_report_fields_flags[i] == 1
-                        chk = Checkbox(label_text, id=f"rep-col-{i}", value=is_checked)
-                        self._report_column_checkboxes.append(chk)
-                        yield chk
-                    
-                    last_flag_val = self._selected_report_fields_flags[14] if len(self._selected_report_fields_flags) > 14 else 0
-                    self.rno_checkbox = Checkbox("РНОКПП", id="rep-rno", value=last_flag_val in (1, 3))
-                    self.dob_checkbox = Checkbox("Дата народження", id="rep-dob", value=last_flag_val in (2, 3))
-                    yield self.rno_checkbox
-                    yield self.dob_checkbox
-
-                with Horizontal(classes="settings-row"):
-                    yield Button("Встановити колони звіту", variant="primary", id="settings-save-report-cols")
 
             # --- Блок глобальних змінних (Звання / Підрозділи) ---
             with Vertical(id="settings-global-box"):
@@ -305,8 +381,6 @@ class SettingsTab(VerticalScroll):
             self.on_change_password()
         elif btn_id == "settings-logo-save":
             self.on_save_logo()
-        elif btn_id == "settings-save-report-cols":
-            self.on_save_report_column_selection()
         elif btn_id == "settings-save-global":
             self.on_save_global_vars()
         elif btn_id == "settings-clear-global":
