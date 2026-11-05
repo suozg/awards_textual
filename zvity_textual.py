@@ -343,4 +343,16 @@ class ZvitTab(Vertical):
     def action_refresh_zvit(self):
         self.refresh_report()
 
-    BINDINGS = [("f5", "refresh_zvit", "Оновити")]
+    def action_open_report_settings(self) -> None:
+        if not self.conn:
+            self.notify("База даних не підключена.", severity="error")
+            return
+
+        from setuptab_textual import ReportSettingsModal
+        self.app.push_screen(ReportSettingsModal(self.conn, self))
+
+    BINDINGS = [
+        ("f4", "open_report_settings", "Налаштування звітів"),
+        ("f5", "refresh_zvit", "Оновити"),
+    ]
+

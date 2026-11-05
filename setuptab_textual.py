@@ -61,6 +61,7 @@ class ReportSettingsModal(ModalScreen[bool]):
             if cursor:
                 cursor.close()
 
+   
     def compose(self) -> ComposeResult:
         with VerticalScroll(id="report-settings-box"):
             yield Label("Налаштування звітів", classes="settings-section-title")
@@ -157,6 +158,31 @@ class SettingsTab(VerticalScroll):
         self._parse_zvit_fields()
         self._load_global_libs_data()
 
+    
+    def set_database(self, conn, cursor):
+        """Получает подключение к БД и загружает списки для Select."""
+        self.conn = conn
+        self.cursor = cursor
+
+        self._load_service_settings_data()
+        self._parse_zvit_fields()
+        self._load_global_libs_data()
+
+        try:
+            self.query_one("#settings-rank-select", Select).set_options(
+                [(rank, rank) for rank in self._loaded_ranks]
+            )
+            self.query_one("#settings-unit-select", Select).set_options(
+                [(unit, unit) for unit in self._loaded_units]
+            )
+        except Exception as exc:
+            self.notify(
+                f"Помилка оновлення списків звань і підрозділів: {exc}",
+                severity="error",
+            )
+
+        self._update_global_vars_ui_state()
+    
     def compose(self) -> ComposeResult:
         with Vertical(id="settings-root"):
             

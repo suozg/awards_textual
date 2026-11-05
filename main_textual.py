@@ -24,7 +24,7 @@ from text_panel_textual import TextPanel
 from laws_textual import LawsTab, LawEditScreen
 from checkers_textual import CheckersWidget
 from zvity_textual import ZvitTab
-from setuptab_textual import SettingsTab, ReportSettingsModal
+from setuptab_textual import SettingsTab
 
 def connect_database(path: str, password: str):
     """Відкриває SQLCipher-базу в режимі сумісності з наявною БД."""
@@ -170,7 +170,6 @@ class AwardsTextualApp(App):
     BINDINGS = [
         ("ctrl+q", "quit", "Вихід"),
         ("f6", "toggle_theme", "Перемкнути тему"),
-        ("f4", "open_report_settings", "Налаштування звітів"),
     ]
 
     def __init__(self, db_path: str):
@@ -220,17 +219,6 @@ class AwardsTextualApp(App):
 
             # Показуємо вікно логіну поверх порожнього дефолтного екрана
             self.push_screen(LoginScreen(self.db_path, db_exists), handle_login)
-
-    def action_open_report_settings(self) -> None:
-        if not self.conn:
-            self.notify("База даних не підключена.", severity="error")
-            return
-
-        try:
-            report_tab = self.screen.query_one("#zvity-panel", ZvitTab)
-            self.push_screen(ReportSettingsModal(self.conn, report_tab))
-        except Exception as exc:
-            self.notify(f"Не вдалося відкрити налаштування звітів: {exc}", severity="error")
 
     def _initialize_backend_task(self) -> None:
         try:
