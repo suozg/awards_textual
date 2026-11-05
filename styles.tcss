@@ -368,6 +368,7 @@ KartkaTab #clear-btn {
 #meed-content-row {
     height: auto;
     width: 100%;
+    align: left top;
 }
 
 /* Ліва частина з полями займатиме основне місце */
@@ -384,7 +385,7 @@ KartkaTab #clear-btn {
     align: center middle;
     content-align: center middle;
     padding: 0;
-    margin-top: 1;
+    /* margin-top: 1; */
 }
 
 #award-image {
@@ -766,7 +767,9 @@ LawEditScreen {
 }
 
 
-
+/* ========================================================================= */
+/* СТИЛІ ВКЛАДКИ ЗВІТИ                                                       */
+/* ========================================================================= */
 ZvitTab {
     height: 1fr;
     width: 1fr;
@@ -828,8 +831,9 @@ ZvitTab {
 }
 
 
-
-/* ===== SettingsTab ===== */
+/* ========================================================================= */
+/* СТИЛІ ВКЛАДКИ «НАЛАШТУВАННЯ» (SettingsTab)                              */
+/* ========================================================================= */
 
 SettingsTab {
     height: 1fr;
@@ -842,6 +846,7 @@ SettingsTab {
     height: 1fr;
     width: 1fr;
     padding: 0 1;
+    overflow-y: auto;
 }
 
 #settings-top-row {
@@ -863,14 +868,15 @@ SettingsTab {
     margin-bottom: 1;
 }
 
-#settings-password-side {
-    width: 32%;
-    min-width: 26;
+#settings-password-box {
+    width: 55%;
+    min-width: 32;
     margin-right: 1;
 }
 
 #settings-logo-box {
-    width: 1fr;
+    width: 45%;
+    min-width: 28;
 }
 
 .settings-section-title {
@@ -907,21 +913,23 @@ SettingsTab {
     color: $text-muted;
     width: auto;
     min-width: 12;
-    margin-right: 1;
-}
-
-#settings-report-grid {
-    grid-size: 5 1;
-    grid-columns: 1fr 1fr 1fr 1fr 1fr;
-    grid-gutter: 1 1;
-    width: 1fr;
-    height: auto;
+    margin-bottom: 0;
     margin-top: 1;
 }
 
+#settings-report-grid {
+    layout: grid;
+    grid-size: 3;          /* Кількість колонок (змініть на 4, якщо хочете ширше) */
+    grid-gutter: 1 1;      /* Відступи між елементами */
+    width: 1fr;
+    height: auto;
+    margin-top: 1;
+    margin-bottom: 1;
+}
+
 #settings-report-grid Checkbox {
-    width: auto;
-    min-width: 12;
+    width: 100%;           /* Розтягуємо чекбокс на всю комірку сітки */
+    min-width: 15;
     margin-right: 1;
 }
 
@@ -944,6 +952,7 @@ SettingsTab {
 #settings-unit-entry {
     width: 1fr;
     min-width: 20;
+    margin-right: 1;
 }
 
 #settings-old-pass,
@@ -951,20 +960,22 @@ SettingsTab {
 #settings-repeat-pass {
     width: 1fr;
     min-width: 12;
+    margin-bottom: 1;
 }
 
 #settings-logo-path {
     width: 1fr;
-    min-width: 24;
+    min-width: 20;
+    margin-right: 1;
 }
 
 #settings-report-dir {
     width: 1fr;
     min-width: 20;
+    margin-right: 1;
 }
 
 #settings-change-password,
-#settings-dir-save,
 #settings-save-report-cols,
 #settings-save-global,
 #settings-clear-global,

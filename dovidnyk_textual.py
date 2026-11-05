@@ -58,7 +58,7 @@ class DovidnykTab(Vertical):
 
     def compose(self) -> ComposeResult:
         with Horizontal(id="dovidnyk-layout"):
-            yield Tree("Державні нагороди", id="award-tree")
+            yield Tree("Завантаження даних...", id="award-tree")
             with VerticalScroll(id="award-details"):
                 with Vertical(id="empty-panel"):
                     yield Static("Оберіть категорію або нагороду в дереві ліворуч.")
