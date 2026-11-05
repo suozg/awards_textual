@@ -132,10 +132,10 @@ class MainScreen(Screen):
                 yield ZvitTab(id="zvity-panel")
             with TabPane("ТЕКСТ", id="tab-text"):
                 yield TextPanel(id="text-panel")
-            with TabPane("НАЛАШТУВАННЯ", id="tab-settings"):
-                yield SettingsTab(id="settings-tab")
             with TabPane("ЗАКОНИ", id="tab-laws"):
                 yield LawsTab(id="laws-tab") 
+            with TabPane("НАЛАШТУВАННЯ", id="tab-settings"):
+                yield SettingsTab(id="settings-tab")
             with TabPane("SQL", id="tab-sql"):
                 with Vertical():
                     yield Label("SQL-запит (Ctrl+Enter — виконати)")

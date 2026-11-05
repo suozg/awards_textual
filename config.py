@@ -1,7 +1,7 @@
 # config.py
 
 # --------- Параметри для роботи програми
-MASTERKEY = None # заменить на None после отладки
+MASTERKEY = "1" # заменить на None после отладки
 SHOW_MORE_IMAGES = None # виводим одно или несколько изображений наград в TAB1
 DATABASE_FILE_PATH = 'awards_v4e.db' # шлях до бази даних
 START_YEAR = 2014

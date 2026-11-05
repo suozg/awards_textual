@@ -831,8 +831,9 @@ ZvitTab {
 }
 
 
+
 /* ========================================================================= */
-/* СТИЛІ ВКЛАДКИ «НАЛАШТУВАННЯ» (SettingsTab)                              */
+/* СТИЛІ ВКЛАДКИ «НАЛАШТУВАННЯ» І МОДАЛЬНОГО ВІКНА ЗВІТІВ                  */
 /* ========================================================================= */
 
 SettingsTab {
@@ -852,26 +853,26 @@ SettingsTab {
 #settings-top-row {
     height: auto;
     width: 1fr;
-    margin-bottom: 1;
+    margin-bottom: 0; 
     align: left top;
 }
 
 #settings-password-box,
-#settings-report-box,
 #settings-global-box,
 #settings-logo-box {
     height: auto;
     width: 1fr;
-    border: round $panel;
-    background: $surface;
-    padding: 1 2;
-    margin-bottom: 1;
+    border: none;
+    background: transparent;
+    padding: 0 1; 
+    margin-bottom: 1; 
 }
 
 #settings-password-box {
     width: 55%;
     min-width: 32;
     margin-right: 1;
+    margin-bottom: 1;
 }
 
 #settings-logo-box {
@@ -888,7 +889,7 @@ SettingsTab {
 .settings-row {
     height: auto;
     width: 1fr;
-    margin-bottom: 1;
+    margin-bottom: 0; 
     align: left middle;
 }
 
@@ -896,6 +897,7 @@ SettingsTab {
     width: 1fr;
     min-width: 12;
     margin-right: 1;
+    margin-bottom: 1; 
 }
 
 .settings-row > Select {
@@ -917,31 +919,6 @@ SettingsTab {
     margin-top: 1;
 }
 
-#settings-report-grid {
-    layout: grid;
-    grid-size: 3;          /* Кількість колонок (змініть на 4, якщо хочете ширше) */
-    grid-gutter: 1 1;      /* Відступи між елементами */
-    width: 1fr;
-    height: auto;
-    margin-top: 1;
-    margin-bottom: 1;
-}
-
-#settings-report-grid Checkbox {
-    width: 100%;           /* Розтягуємо чекбокс на всю комірку сітки */
-    min-width: 15;
-    margin-right: 1;
-}
-
-#settings-status {
-    height: auto;
-    min-height: 3;
-    padding: 0 1;
-    background: $boost;
-    color: $text-muted;
-    margin-top: 1;
-}
-
 #settings-rank-select,
 #settings-unit-select {
     width: 1fr;
@@ -953,6 +930,7 @@ SettingsTab {
     width: 1fr;
     min-width: 20;
     margin-right: 1;
+    margin-bottom: 1;
 }
 
 #settings-old-pass,
@@ -960,7 +938,7 @@ SettingsTab {
 #settings-repeat-pass {
     width: 1fr;
     min-width: 12;
-    margin-bottom: 1;
+    margin-bottom: 1; 
 }
 
 #settings-logo-path {
@@ -969,20 +947,29 @@ SettingsTab {
     margin-right: 1;
 }
 
-#settings-report-dir {
-    width: 1fr;
-    min-width: 20;
-    margin-right: 1;
+/* Компактный размер для превью логотипа, чтобы он не растягивал интерфейс */
+#settings-logo-preview {
+    width: 22;
+    height: 9;
+    margin: 0 0 1 0;
+}
+
+#settings-logo-status {
+    height: auto;
+    color: $text-muted;
+    margin-bottom: 1;
 }
 
 #settings-change-password,
-#settings-save-report-cols,
 #settings-save-global,
 #settings-clear-global,
 #settings-logo-save {
     min-width: 16;
 }
 
+
+
+/* Модальне вікно налаштувань звітів */
 ReportSettingsModal {
     align: center middle;
 }
@@ -995,18 +982,28 @@ ReportSettingsModal {
     background: $surface;
 }
 
-#report-settings-box > .settings-row:last-of-type {
-    margin-top: 1;
-}
-
-#settings-logo-preview {
-    width: 32;
-    height: 12;
-    margin: 1 0;
-}
-
-#settings-logo-status {
+#settings-report-grid {
+    layout: grid;
+    grid-size: 3;
+    grid-gutter: 1 1;
+    width: 1fr;
     height: auto;
-    color: $text-muted;
+    margin-top: 1;
+    margin-bottom: 1;
 }
 
+#settings-report-grid Checkbox {
+    width: 100%;
+    min-width: 15;
+    margin-right: 1;
+}
+
+#settings-report-dir {
+    width: 1fr;
+    min-width: 20;
+    margin-right: 1;
+}
+
+#settings-save-report-cols {
+    min-width: 16;
+}
