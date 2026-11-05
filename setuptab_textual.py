@@ -4,7 +4,8 @@ import base64
 from io import BytesIO
 import os
 import sqlite3
-
+from PIL import Image as PILImage, ImageOps
+from textual_image.widget import Image as TerminalImage
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.widgets import Button, Checkbox, Input, Label, Select, Static
@@ -150,6 +151,7 @@ class SettingsTab(VerticalScroll):
         self.search_tab = search_tab
         self.info_panel = info_panel
         self.last_footer_message = None
+        self.logo_blob = None
 
         self._loaded_units = []
         self._loaded_ranks = []
@@ -169,6 +171,7 @@ class SettingsTab(VerticalScroll):
         self._load_service_settings_data()
         self._parse_zvit_fields()
         self._load_global_libs_data()
+        self._refresh_logo_preview()
 
         try:
             self.query_one("#settings-rank-select", Select).set_options(
@@ -204,8 +207,8 @@ class SettingsTab(VerticalScroll):
                 # Блок логотипу
                 with Vertical(id="settings-logo-box"):
                     yield Label("Логотип організації", classes="settings-section-title")
-                    # Замість wx.StaticBitmap виводимо шлях або статус у Static
-                    yield Static("Шлях до файлу логотипу:", classes="settings-label")
+                    yield TerminalImage(id="settings-logo-preview")
+                    yield Static("Логотип не завантажено.", id="settings-logo-status")
                     with Horizontal(classes="settings-row"):
                         yield Input(placeholder="Шлях до зображення (*.png)", id="settings-logo-path")
                         yield Button("Зберегти лого", variant="primary", id="settings-logo-save")
@@ -257,6 +260,7 @@ class SettingsTab(VerticalScroll):
         self.service_pass = None
         self.cookies = None
         self.last_time_changes = None
+        self.logo_blob = None
 
         if settings_row:
             indices = ServiceSettingsIndices
@@ -277,6 +281,34 @@ class SettingsTab(VerticalScroll):
                 self.cookies = settings_row[indices.COOKIES]
             if indices.LAST_TIME_CHANGES < len(settings_row) and settings_row[indices.LAST_TIME_CHANGES] is not None:
                 self.last_time_changes = settings_row[indices.LAST_TIME_CHANGES]
+            if ServiceSettingsIndices.LOGO < len(settings_row):
+                 self.logo_blob = settings_row[ServiceSettingsIndices.LOGO]
+
+    def _refresh_logo_preview(self) -> None:
+        try:
+            preview = self.query_one("#settings-logo-preview", TerminalImage)
+            status = self.query_one("#settings-logo-status", Static)
+        except Exception:
+            # Виджеты ещё не созданы.
+            return
+
+        if not self.logo_blob:
+            status.update("Логотип не завантажено.")
+            return
+
+        try:
+            with PILImage.open(BytesIO(bytes(self.logo_blob))) as source:
+                source.load()
+                image = ImageOps.contain(
+                    source.convert("RGBA"),
+                    (320, 180),
+                    method=PILImage.Resampling.LANCZOS,
+                )
+
+            preview.image = image
+            status.update("")
+        except Exception as exc:
+            status.update(f"Не вдалося показати логотип: {exc}")
 
     def _parse_zvit_fields(self):
         self._selected_report_fields_flags = []
@@ -380,6 +412,8 @@ class SettingsTab(VerticalScroll):
                     cursor.execute("INSERT INTO service_ (id, logo) VALUES (1, ?)", (logo_data,))
                 self.conn.commit()
                 self.notify("Логотип успішно збережено в базу!")
+                self.logo_blob = logo_data
+                self._refresh_logo_preview()
                 
                 if self.search_tab and hasattr(self.search_tab, "refresh_logo"):
                     self.search_tab.refresh_logo()

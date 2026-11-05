@@ -998,3 +998,15 @@ ReportSettingsModal {
 #report-settings-box > .settings-row:last-of-type {
     margin-top: 1;
 }
+
+#settings-logo-preview {
+    width: 32;
+    height: 12;
+    margin: 1 0;
+}
+
+#settings-logo-status {
+    height: auto;
+    color: $text-muted;
+}
+
