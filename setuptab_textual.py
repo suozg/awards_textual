@@ -133,6 +133,8 @@ class ReportSettingsModal(ModalScreen[bool]):
             if cursor:
                 cursor.close()
 
+
+
 class SettingsTab(VerticalScroll):
     """Вкладка «Налаштування» для Textual."""
 
@@ -192,16 +194,9 @@ class SettingsTab(VerticalScroll):
                 # Блок зміни пароля
                 with Vertical(id="settings-password-box"):
                     yield Label("Зміна пароля до бази даних", classes="settings-section-title")
-                    yield Label("Ввести старий пароль", classes="settings-label")
                     yield Input(placeholder="Старий пароль", password=True, id="settings-old-pass")
-                    yield Label("Ввести новий пароль", classes="settings-label")
                     yield Input(placeholder="Новий пароль", password=True, id="settings-new-pass")
-                    yield Label("Повторити новий пароль", classes="settings-label")
                     yield Input(placeholder="Повторити новий пароль", password=True, id="settings-repeat-pass")
-                    
-                    with Horizontal(classes="settings-row"):
-                        yield Checkbox("— завжди показувати блок посмертних нагород", id="show-dead-chk", value=self.show_hellou >= 2)
-                        yield Checkbox("— графік при старті", id="show-hello-chk", value=self.show_hellou in (1, 3))
                     
                     with Horizontal(classes="settings-row"):
                         yield Button("Змінити пароль", variant="error", id="settings-change-password")
@@ -236,8 +231,6 @@ class SettingsTab(VerticalScroll):
                     yield Button("Зберегти зміни", variant="primary", id="settings-save-global")
                     yield Button("Очистити", id="settings-clear-global")
 
-            # Статусний рядок усередині вкладки за потреби
-            yield Static("", id="settings-status")
 
     def on_mount(self) -> None:
         if self.show_hellou in (1, 3) and self.search_tab and hasattr(self.search_tab, "on_t_sizer_click"):
@@ -359,47 +352,6 @@ class SettingsTab(VerticalScroll):
     def on_select_changed(self, event: Select.Changed) -> None:
         if event.select.id in ("settings-rank-select", "settings-unit-select"):
             self._update_global_vars_ui_state()
-
-    def on_checkbox_changed(self, event: Checkbox.Changed) -> None:
-        if event.checkbox.id in ("show-hello-chk", "show-dead-chk"):
-            self.on_toggle_show_hello(event)
-
-    def on_toggle_show_hello(self, event):
-        state_1 = self.query_one("#show-hello-chk", Checkbox).value
-        state_2 = self.query_one("#show-dead-chk", Checkbox).value
-
-        if not state_1 and self.search_tab and hasattr(self.search_tab, "clear_tab1"):
-            self.search_tab.clear_tab1(None)
-        elif state_1 and self.search_tab and hasattr(self.search_tab, "on_t_sizer_click"):
-            self.search_tab.on_t_sizer_click(None)
-
-        if state_1 and state_2:
-            state_onoff = 3
-        elif state_1:
-            state_onoff = 1
-        elif state_2:
-            state_onoff = 2
-        else:
-            state_onoff = 0
-
-        self.show_hellou = state_onoff
-        self.update_show_hellou_in_db(self.show_hellou)
-        self.notify("Налаштування відображення оновлено")
-
-    def update_show_hellou_in_db(self, value):
-        cursor = None
-        try:
-            if self.conn:
-                cursor = self.conn.cursor()
-                cursor.execute("UPDATE service_ SET show_hellou = ? WHERE id = 1", (value,))
-                self.conn.commit()
-        except Exception as e:
-            if self.conn:
-                self.conn.rollback()
-            self.notify(f"Помилка збереження статистики: {e}", severity="error")
-        finally:
-            if cursor:
-                cursor.close()
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         btn_id = event.button.id
