@@ -85,6 +85,7 @@ class ZvitTab(Vertical):
             value=AWARD_HANDOVER_STATUS_ASSIGNED,
             id="zvit-handover-status",
         )
+        
         self.submission_status = Select(
             [
                 ("Усі", SUBMISSION_STATUS_ALL),
@@ -435,12 +436,13 @@ class ZvitTab(Vertical):
         filters = self._collect_filters()
 
         status = filters["submission_status"]
-        has_submission_status_filter = status not in (
-            None,
-            "",
-            SUBMISSION_STATUS_ALL,
-            str(SUBMISSION_STATUS_ALL),
-        )
+
+        # У Select может не быть выбранного значения; трактуем его как «Усі».
+        if status is Select.NULL or status in (None, ""):
+            status = str(SUBMISSION_STATUS_ALL)
+
+        status = str(status)
+        has_submission_status_filter = status != str(SUBMISSION_STATUS_ALL)
 
         if has_submission_status_filter:
             # При выборе статуса начинаем с presentation:
@@ -590,9 +592,10 @@ class ZvitTab(Vertical):
         try:
             self.cursor.execute(query, params)
             return self.cursor.fetchall()
-        except sqlite3.Error:
+        except sqlite3.Error as exc:
+            self._set_footer(f"Помилка формування звіту: {exc}")
             return []
-
+  
     def _set_footer(self, message: str):
         self.query_one("#zvit-footer", Static).update(message)
 
@@ -620,11 +623,13 @@ class ZvitTab(Vertical):
                 self._reload_consignment_options()
                 self._reload_submission_options()
 
-    def on_select_changed(self, event):
+    def on_select_changed(self, event: Select.Changed) -> None:
         if event.select.id == "zvit-person-category":
             self._apply_ui_state()
         elif event.select.id == "zvit-award-rank" and self.by_name.value:
             self._reload_award_names_by_rank()
+        elif event.select.id == "zvit-submission-status":
+            self.refresh_report()
 
     def on_input_changed(self, event: Input.Changed) -> None:
         if event.input.id in {"zvit-start-date", "zvit-end-date"}:

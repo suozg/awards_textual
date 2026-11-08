@@ -41,6 +41,27 @@ Footer {
     color: $text-muted;
 }
 
+/* Загальні стилі для чекбоксів */
+Checkbox {
+    color: $text-muted;
+    background: transparent;
+    margin-right: 2;
+}
+
+/* Коли чекбокс увімкнений, Textual додає модифікатор --on */
+Checkbox.-on {
+    color: $primary;
+    text-style: bold;
+}
+
+Checkbox > .checkbox--label {
+    color: $foreground;
+}
+
+Checkbox.-on > .checkbox--label {
+    color: $primary;
+    text-style: bold;
+}
 
 /* ========================================================================= */
 /*              С Т И Л И   П О    К О М П О Н Е Н Т А М                     */
