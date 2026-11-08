@@ -60,7 +60,7 @@ class ZvitTab(Vertical):
 
         self.all_time = Checkbox("увесь час", value=False, id="zvit-all-time")
         self.posthumous = Checkbox("посмертно", value=False, id="zvit-posthumous")
-        self.by_name = Checkbox("ранг / назва", value=False, id="zvit-by-name")
+        self.by_name = Checkbox(" назва", value=False, id="zvit-by-name")
         self.issue_protocols = Checkbox("відсутні протоколи видачі", value=False, id="zvit-issue-protocols")
         self.specific_submission = Checkbox("окреме подання", value=False, id="zvit-specific-submission")
 
@@ -99,7 +99,6 @@ class ZvitTab(Vertical):
                 yield Label("—", classes="zvit-range-separator")
                 yield self.end_date
                 yield self.all_time
-                yield self.posthumous
 
             with Horizontal(id="zvit-middle-row"):
                 yield Label("виконавець:", classes="zvit-label")
@@ -108,6 +107,7 @@ class ZvitTab(Vertical):
                 yield self.person_category
                 yield Label("підрозділ:", classes="zvit-label")
                 yield self.unit
+                yield self.posthumous
 
             with Horizontal(id="zvit-award-row"):
                 yield Label("нагорода:", classes="zvit-label")
@@ -115,12 +115,14 @@ class ZvitTab(Vertical):
                 yield self.by_name
                 yield self.award_name
 
-            with Horizontal(id="zvit-extra-row"):
+            with Horizontal(id="zvit-awards-issue-row"):
                 yield Label("статус вручення:", classes="zvit-label")
                 yield self.handover_status
+                yield self.issue_protocols
+
+            with Horizontal(id="zvit-extra-row"):
                 yield Label("статус подання:", classes="zvit-label")
                 yield self.submission_status
-                yield self.issue_protocols
                 yield self.specific_submission
                 yield Button("Сформувати", variant="primary", id="zvit-refresh")
                 yield Button("CSV", id="zvit-export-csv")
@@ -143,48 +145,44 @@ class ZvitTab(Vertical):
         return datetime.now().strftime("%Y-%m-%d")
 
     def _load_reference_data(self):
-        """Загружает категории наград и подразделения, но не названия наград."""
+        """Загружает категории независимо от состояния таблицы libs."""
+        # Категории берутся из RankingValues — для этого таблица libs не нужна.
+        rank_options = [("Усі", "")]
+        rank_options.extend(
+            (rank_name, str(rank_number))
+            for rank_number, rank_name in enumerate(RankingValues)
+            if rank_name
+        )
+        self.award_rank.set_options(rank_options)
+
+        self.unit.set_options([("Усі", "")])
+        self._set_award_name_options([])
+
         if not self.cursor:
-            self.unit.options = [("Усі", "")]
-            self.award_rank.options = [("Усі", "")]
-            self.award_name.options = [("Усі", "")]
             return
 
+        # Ошибка загрузки подразделений не должна мешать заполнению рангов.
         try:
             _, units = get_units_and_ranks(self.cursor)
-
-            self.award_rank.options = [
-                ("Усі", ""),
-                *[
-                    (rank_name, rank_number)
-                    for rank_number, rank_name in enumerate(RankingValues)
-                    if rank_name
-                ],
-            ]
-            self.unit.options = [("Усі", "")] + [
-                (unit, unit) for unit in units if unit
-            ]
-
+            self.unit.set_options(
+                [("Усі", "")] + [(unit, unit) for unit in units if unit]
+            )
         except RuntimeError as exc:
-            self.award_rank.options = [("Усі", "")]
-            self.unit.options = [("Усі", "")]
-            self._set_award_name_options([])
-            self._set_footer(f"Помилка завантаження довідників: {exc}")
+            self._set_footer(f"Помилка завантаження підрозділів: {exc}")
 
         self.award_rank.value = ""
         self.unit.value = ""
-        self._set_award_name_options([])
 
     def _set_award_name_options(self, names):
         """Обновляет список названий и сбрасывает выбранное название."""
-        self.award_name.options = [("Усі", "")] + [
-            (name, name) for name in names
-        ]
+        self.award_name.set_options(
+            [("Усі", "")] + [(name, name) for name in names]
+        )
         self.award_name.value = ""
 
     def _apply_ui_state(self):
-        """Включает фильтры и обновляет список наград при необходимости."""
-        self.award_rank.disabled = not self.by_name.value
+        """Включает фильтры и загружает список наград при необходимости."""
+        self.award_rank.disabled = False
         self.award_name.disabled = not self.by_name.value
         self.unit.disabled = self.person_category.value == "civilian"
 

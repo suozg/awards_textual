@@ -784,6 +784,7 @@ ZvitTab {
 #zvit-top-row,
 #zvit-middle-row,
 #zvit-award-row,
+#zvit-awards-issue-row,
 #zvit-extra-row {
     height: auto;
     width: 1fr;
