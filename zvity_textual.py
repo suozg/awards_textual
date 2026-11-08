@@ -67,7 +67,7 @@ class ZvitTab(Vertical):
         self.handover_status = Select(
             [
                 ("призначені", AWARD_HANDOVER_STATUS_ASSIGNED),
-                ("видані", AWARD_HANDOVER_STATUS_ISSUED),
+("видані", AWARD_HANDOVER_STATUS_ISSUED),
                 ("залишок в натурі", AWARD_HANDOVER_STATUS_REMAINING),
             ],
             value=AWARD_HANDOVER_STATUS_ASSIGNED,
@@ -143,6 +143,7 @@ class ZvitTab(Vertical):
         return datetime.now().strftime("%Y-%m-%d")
 
     def _load_reference_data(self):
+        """Загружает категории наград и подразделения, но не названия наград."""
         if not self.cursor:
             self.unit.options = [("Усі", "")]
             self.award_rank.options = [("Усі", "")]
@@ -154,41 +155,102 @@ class ZvitTab(Vertical):
 
             self.award_rank.options = [
                 ("Усі", ""),
-                *[(rank, rank) for rank in RankingValues if rank],
+                *[
+                    (rank_name, rank_number)
+                    for rank_number, rank_name in enumerate(RankingValues)
+                    if rank_name
+                ],
             ]
-            self.notify(str(self.award_rank.options))
-            self.unit.options = [("Усі", "")] + [(unit, unit) for unit in units]
+            self.unit.options = [("Усі", "")] + [
+                (unit, unit) for unit in units if unit
+            ]
 
-            names = get_formatted_unique_awarded_distinctions(self.cursor)
-            self.award_name.options = [("Усі", "")] + [(name, name) for name in names]
-        except RuntimeError:
+        except RuntimeError as exc:
             self.award_rank.options = [("Усі", "")]
             self.unit.options = [("Усі", "")]
-            self.award_name.options = [("Усі", "")]
+            self._set_award_name_options([])
+            self._set_footer(f"Помилка завантаження довідників: {exc}")
+
         self.award_rank.value = ""
         self.unit.value = ""
+        self._set_award_name_options([])
+
+    def _set_award_name_options(self, names):
+        """Обновляет список названий и сбрасывает выбранное название."""
+        self.award_name.options = [("Усі", "")] + [
+            (name, name) for name in names
+        ]
         self.award_name.value = ""
 
     def _apply_ui_state(self):
-        self.award_rank.disabled = False
+        """Включает фильтры и обновляет список наград при необходимости."""
+        self.award_rank.disabled = not self.by_name.value
         self.award_name.disabled = not self.by_name.value
         self.unit.disabled = self.person_category.value == "civilian"
 
         if self.by_name.value:
             self._reload_award_names_by_rank()
+        else:
+            self._set_award_name_options([])
 
     def _reload_award_names_by_rank(self):
-        if not self.cursor:
+        """Загружает награды, назначенные в текущем периоде и выбранного ранга."""
+        if not self.cursor or not self.by_name.value:
+            self._set_award_name_options([])
             return
 
+        query = """
+            SELECT DISTINCT a.denotation
+            FROM meed AS m
+            JOIN award AS a ON a.id = m.id_award
+            WHERE a.denotation IS NOT NULL
+              AND TRIM(a.denotation) != ''
+        """
+        params = []
+
+        # Флажок «увесь час» отключает ограничение периода так же, как в отчёте.
+        if not self.all_time.value:
+            start = self.start_date.value.strip()
+            end = self.end_date.value.strip()
+
+            try:
+                if start:
+                    datetime.strptime(start, "%Y-%m-%d")
+                if end:
+                    datetime.strptime(end, "%Y-%m-%d")
+            except ValueError:
+                self._set_award_name_options([])
+                return
+
+            if start and end and start > end:
+                self._set_award_name_options([])
+                return
+
+            if start:
+                query += " AND m.date_decree >= ?"
+                params.append(start)
+            if end:
+                query += " AND m.date_decree <= ?"
+                params.append(end)
+
         rank_filter = self.award_rank.value
+        if rank_filter not in (None, ""):
+            query += " AND a.ranking = ?"
+            params.append(int(rank_filter))
+
+        query += " ORDER BY a.denotation COLLATE NOCASE"
+
         try:
-            names = get_formatted_unique_awarded_distinctions(self.cursor, rank_filter=rank_filter or None)
-            self.award_name.options = [("Усі", "")] + [(name, name) for name in names]
-            self.award_name.value = ""
-        except RuntimeError:
-            self.award_name.options = [("Усі", "")]
-            self.award_name.value = ""
+            self.cursor.execute(query, params)
+            names = [
+                row[0]
+                for row in self.cursor.fetchall()
+                if row and row[0]
+            ]
+            self._set_award_name_options(names)
+        except sqlite3.Error as exc:
+            self._set_award_name_options([])
+            self._set_footer(f"Помилка завантаження назв нагород: {exc}")
 
     def _collect_filters(self) -> dict[str, Any]:
         return {
@@ -288,13 +350,14 @@ class ZvitTab(Vertical):
             query += " AND p.unit = ?"
             params.append(filters["unit"])
 
-        if filters["award_rank"] not in (None, ""):
-            query += " AND a.ranking = ?"
-            params.append(filters["award_rank"])
+        if filters["by_name"]:
+            if filters["award_rank"] not in (None, ""):
+                query += " AND a.ranking = ?"
+                params.append(int(filters["award_rank"]))
 
-        if filters["award_name"] not in (None, "") and filters["by_name"]:
-            query += " AND a.denotation = ?"
-            params.append(filters["award_name"])
+            if filters["award_name"] not in (None, ""):
+                query += " AND a.denotation = ?"
+                params.append(filters["award_name"])
 
         worker = filters["worker"]
         if worker not in (None, ""):
@@ -346,9 +409,13 @@ class ZvitTab(Vertical):
     def on_select_changed(self, event):
         if event.select.id == "zvit-person-category":
             self._apply_ui_state()
-
         elif event.select.id == "zvit-award-rank" and self.by_name.value:
             self._reload_award_names_by_rank()
+
+    def on_input_changed(self, event: Input.Changed) -> None:
+        if event.input.id in {"zvit-start-date", "zvit-end-date"}:
+            if self.by_name.value:
+                self._reload_award_names_by_rank()
 
     def action_refresh_zvit(self):
         self.refresh_report()
