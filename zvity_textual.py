@@ -16,6 +16,7 @@ from database_logic_textual import (
     get_formatted_unique_awarded_distinctions,
     get_units_and_ranks,
 )
+from report_export import export_report_csv, export_report_xlsx
 
 PERSON_CATEGORY_ALL = 6
 AWARD_HANDOVER_STATUS_REMAINING = 1
@@ -58,6 +59,17 @@ class ZvitTab(Vertical):
         self.award_rank = Select([("Усі", "")], value="", id="zvit-award-rank")
         self.award_name = Select([("Усі", "")], value="", id="zvit-award-name")
 
+        self.consignment_note = Select(
+            [("Усі накладні", "")], value="", id="zvit-consignment-note"
+        )
+        self.specific_submission_number = Select(
+            [("Оберіть подання", "")],
+            value="",
+            id="zvit-specific-submission-number",
+        )
+        # Значення селектора сопоставляются с номером и датой регистрации.
+        self._submission_options: dict[str, tuple[str, str]] = {}
+
         self.all_time = Checkbox("увесь час", value=False, id="zvit-all-time")
         self.posthumous = Checkbox("посмертно", value=False, id="zvit-posthumous")
         self.by_name = Checkbox(" назва", value=False, id="zvit-by-name")
@@ -67,7 +79,7 @@ class ZvitTab(Vertical):
         self.handover_status = Select(
             [
                 ("призначені", AWARD_HANDOVER_STATUS_ASSIGNED),
-("видані", AWARD_HANDOVER_STATUS_ISSUED),
+                ("видані", AWARD_HANDOVER_STATUS_ISSUED),
                 ("залишок в натурі", AWARD_HANDOVER_STATUS_REMAINING),
             ],
             value=AWARD_HANDOVER_STATUS_ASSIGNED,
@@ -118,12 +130,15 @@ class ZvitTab(Vertical):
             with Horizontal(id="zvit-awards-issue-row"):
                 yield Label("статус вручення:", classes="zvit-label")
                 yield self.handover_status
+                yield Label("накладна:", classes="zvit-label")
+                yield self.consignment_note
                 yield self.issue_protocols
 
             with Horizontal(id="zvit-extra-row"):
                 yield Label("статус подання:", classes="zvit-label")
                 yield self.submission_status
                 yield self.specific_submission
+                yield self.specific_submission_number
                 yield Button("Сформувати", variant="primary", id="zvit-refresh")
                 yield Button("CSV", id="zvit-export-csv")
                 yield Button("XLSX", id="zvit-export-xlsx")
@@ -172,6 +187,8 @@ class ZvitTab(Vertical):
 
         self.award_rank.value = ""
         self.unit.value = ""
+        self._reload_consignment_options()
+        self._reload_submission_options()
 
     def _set_award_name_options(self, names):
         """Обновляет список названий и сбрасывает выбранное название."""
@@ -185,6 +202,7 @@ class ZvitTab(Vertical):
         self.award_rank.disabled = False
         self.award_name.disabled = not self.by_name.value
         self.unit.disabled = self.person_category.value == "civilian"
+        self.specific_submission_number.disabled = not self.specific_submission.value
 
         if self.by_name.value:
             self._reload_award_names_by_rank()
@@ -250,7 +268,121 @@ class ZvitTab(Vertical):
             self._set_award_name_options([])
             self._set_footer(f"Помилка завантаження назв нагород: {exc}")
 
+    def _date_bounds(self):
+        """Возвращает корректный диапазон дат или (None, None) для режима «увесь час»."""
+        if self.all_time.value:
+            return None, None
+
+        start = self.start_date.value.strip()
+        end = self.end_date.value.strip()
+        try:
+            if start:
+                datetime.strptime(start, "%Y-%m-%d")
+            if end:
+                datetime.strptime(end, "%Y-%m-%d")
+        except ValueError:
+            return None, None
+
+        if start and end and start > end:
+            return None, None
+        return start or None, end or None
+
+    def _reload_consignment_options(self):
+        """Загружает накладные за выбранный период."""
+        if not self.cursor:
+            return
+
+        start, end = self._date_bounds()
+        if not self.all_time.value and start is None and end is None:
+            return
+
+        query = """
+            SELECT DISTINCT consignment_note
+            FROM meed
+            WHERE consignment_note IS NOT NULL
+              AND TRIM(consignment_note) != ''
+        """
+        params = []
+        if start:
+            query += " AND date_decree >= ?"
+            params.append(start)
+        if end:
+            query += " AND date_decree <= ?"
+            params.append(end)
+        query += " ORDER BY consignment_note DESC"
+
+        try:
+            self.cursor.execute(query, params)
+            notes = [
+                str(row[0]).strip()
+                for row in self.cursor.fetchall()
+                if row and row[0]
+            ]
+            selected = self.consignment_note.value
+            self.consignment_note.set_options(
+                [("Усі накладні", "")] + [(note, note) for note in notes]
+            )
+            self.consignment_note.value = selected if selected in notes else ""
+        except sqlite3.Error as exc:
+            self._set_footer(f"Помилка завантаження накладних: {exc}")
+
+    def _reload_submission_options(self):
+        """Загружает отдельные подання в формате «номер від дата»."""
+        if not self.cursor:
+            return
+
+        start, end = self._date_bounds()
+        if not self.all_time.value and start is None and end is None:
+            self._submission_options = {}
+            self.specific_submission_number.set_options(
+                [("Оберіть подання", "")]
+            )
+            return
+
+        query = """
+            SELECT DISTINCT registration, date_registration
+            FROM presentation
+            WHERE registration IS NOT NULL
+              AND TRIM(registration) != ''
+        """
+        params = []
+        if start:
+            query += " AND date_registration >= ?"
+            params.append(start)
+        if end:
+            query += " AND date_registration <= ?"
+            params.append(end)
+        query += " ORDER BY registration DESC, date_registration DESC"
+
+        try:
+            self.cursor.execute(query, params)
+            options = []
+            option_map = {}
+            for index, (registration, date_registration) in enumerate(
+                self.cursor.fetchall()
+            ):
+                registration = str(registration).strip()
+                date_registration = str(date_registration or "").strip()
+                value = str(index)
+                label = f"{registration} від {date_registration}"
+                options.append((label, value))
+                option_map[value] = (registration, date_registration)
+
+            selected = self.specific_submission_number.value
+            self._submission_options = option_map
+            self.specific_submission_number.set_options(
+                [("Оберіть подання", "")] + options
+            )
+            self.specific_submission_number.value = (
+                selected if selected in option_map else ""
+            )
+        except sqlite3.Error as exc:
+            self._set_footer(f"Помилка завантаження подань: {exc}")
+
     def _collect_filters(self) -> dict[str, Any]:
+        submission = self._submission_options.get(
+            self.specific_submission_number.value
+        )
         return {
             "all_time": self.all_time.value,
             "posthumous": self.posthumous.value,
@@ -258,6 +390,9 @@ class ZvitTab(Vertical):
             "by_name": self.by_name.value,
             "issue_protocols": self.issue_protocols.value,
             "specific_submission": self.specific_submission.value,
+            "submission_number": submission[0] if submission else None,
+            "submission_date": submission[1] if submission else None,
+            "consignment_note": self.consignment_note.value,
             "worker": self.worker.value,
             "person_category": self.person_category.value,
             "unit": self.unit.value,
@@ -299,35 +434,80 @@ class ZvitTab(Vertical):
     def _fetch_rows(self):
         filters = self._collect_filters()
 
-        query = """
-            SELECT
-                p.name,
-                p.rank,
-                p.unit,
-                a.denotation,
-                m.date_decree,
-                CASE
-                    WHEN m.handover IS NULL OR TRIM(m.handover) = '' THEN 'залишок в натурі'
-                    ELSE 'видано'
-                END,
-                pr.registration,
-                pr.date_registration
-            FROM meed m
-            LEFT JOIN personality p ON p.id = m.id_personality
-            LEFT JOIN award a ON a.id = m.id_award
-            LEFT JOIN presentation pr ON pr.id_meed = m.id
-            WHERE 1=1
-        """
+        status = filters["submission_status"]
+        has_submission_status_filter = status not in (
+            None,
+            "",
+            SUBMISSION_STATUS_ALL,
+            str(SUBMISSION_STATUS_ALL),
+        )
+
+        if has_submission_status_filter:
+            # При выборе статуса начинаем с presentation:
+            # иначе подання без связанной награды не попадут в результаты.
+            query = """
+                SELECT
+                    p.name,
+                    p.rank,
+                    p.unit,
+                    a.denotation,
+                    m.date_decree,
+                    CASE
+                        WHEN m.id IS NULL THEN ''
+                        WHEN m.handover IS NULL OR TRIM(m.handover) = ''
+                            THEN 'залишок в натурі'
+                        ELSE 'видано'
+                    END,
+                    pr.registration,
+                    pr.date_registration
+                FROM presentation pr
+                LEFT JOIN personality p ON p.id = pr.id_personality
+                LEFT JOIN meed m
+                    ON CAST(pr.id_meed AS INTEGER) > 0
+                   AND m.id = CAST(pr.id_meed AS INTEGER)
+                LEFT JOIN award a ON a.id = m.id_award
+                WHERE 1=1
+            """
+        else:
+            # Для режима «Усі подання» сохраняем прежний список награждений.
+            query = """
+                SELECT
+                    p.name,
+                    p.rank,
+                    p.unit,
+                    a.denotation,
+                    m.date_decree,
+                    CASE
+                        WHEN m.handover IS NULL OR TRIM(m.handover) = ''
+                            THEN 'залишок в натурі'
+                        ELSE 'видано'
+                    END,
+                    pr.registration,
+                    pr.date_registration
+                FROM meed m
+                LEFT JOIN personality p ON p.id = m.id_personality
+                LEFT JOIN award a ON a.id = m.id_award
+                LEFT JOIN presentation pr ON pr.id_meed = m.id
+                WHERE 1=1
+            """
         params: list[Any] = []
 
         if not filters["all_time"]:
             start = (filters["start_date"] or "").strip()
             end = (filters["end_date"] or "").strip()
+
+            # Для фильтра статуса период относится к дате регистрации подання.
+            date_column = (
+                "pr.date_registration"
+                if has_submission_status_filter
+                else "m.date_decree"
+            )
+
             if start:
-                query += " AND m.date_decree >= ?"
+                query += f" AND {date_column} >= ?"
                 params.append(start)
             if end:
-                query += " AND m.date_decree <= ?"
+                query += f" AND {date_column} <= ?"
                 params.append(end)
 
         if filters["posthumous"]:
@@ -335,6 +515,10 @@ class ZvitTab(Vertical):
 
         if filters["issue_protocols"]:
             query += " AND (m.handover IS NULL OR TRIM(m.handover) = '')"
+
+        if filters["consignment_note"] not in (None, ""):
+            query += " AND m.consignment_note = ?"
+            params.append(filters["consignment_note"])
 
         if filters["civilian"]:
             query += " AND (p.rank IS NULL OR TRIM(p.rank) = '')"
@@ -366,19 +550,41 @@ class ZvitTab(Vertical):
             elif worker == "2":
                 query += " AND (pr.worker IS NULL OR pr.worker NOT IN (0, 1))"
 
-        submission_status = filters["submission_status"]
-        if submission_status not in (None, "", SUBMISSION_STATUS_ALL):
-            status = int(submission_status)
-            if status == 1:
-                query += " AND pr.report = 1"
-            elif status == 2:
-                query += " AND pr.report = 0"
-            elif status == 3:
-                query += " AND (pr.report IS NULL OR pr.report = '')"
+        if has_submission_status_filter:
+            status = int(status)
+
+            if status == 1:  # Погоджені: подання связано с наградой
+                query += " AND CAST(pr.id_meed AS INTEGER) > 0"
+
+            elif status == 2:  # Не погоджені
+                query += """
+                    AND TRIM(CAST(pr.id_meed AS TEXT)) = '0'
+                """
+
+            elif status == 3:  # У залишку: связи с наградой ещё нет
+                query += """
+                    AND (
+                        pr.id_meed IS NULL
+                        OR TRIM(CAST(pr.id_meed AS TEXT)) = ''
+                    )
+                """
 
         if filters["specific_submission"]:
-            query += " AND pr.registration IS NOT NULL AND TRIM(pr.registration) != ''"
-
+            if filters["submission_number"]:
+                query += (
+                    " AND pr.registration = ?"
+                    " AND COALESCE(pr.date_registration, '') = ?"
+                )
+                params.extend([
+                    filters["submission_number"],
+                    filters["submission_date"] or "",
+                ])
+            else:
+                query += (
+                    " AND pr.registration IS NOT NULL"
+                    " AND TRIM(pr.registration) != ''"
+                )
+            
         query += " ORDER BY m.date_decree DESC, p.name COLLATE NOCASE"
 
         try:
@@ -393,6 +599,10 @@ class ZvitTab(Vertical):
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "zvit-refresh":
             self.refresh_report()
+        elif event.button.id == "zvit-export-csv":
+            self._export_report("csv")
+        elif event.button.id == "zvit-export-xlsx":
+            self._export_report("xlsx")
 
     def on_checkbox_changed(self, event) -> None:
         if event.checkbox.id in {
@@ -403,6 +613,12 @@ class ZvitTab(Vertical):
             "zvit-specific-submission",
         }:
             self._apply_ui_state()
+            if event.checkbox.id == "zvit-specific-submission":
+                if not self.specific_submission.value:
+                    self.specific_submission_number.value = ""
+            elif event.checkbox.id == "zvit-all-time":
+                self._reload_consignment_options()
+                self._reload_submission_options()
 
     def on_select_changed(self, event):
         if event.select.id == "zvit-person-category":
@@ -414,6 +630,8 @@ class ZvitTab(Vertical):
         if event.input.id in {"zvit-start-date", "zvit-end-date"}:
             if self.by_name.value:
                 self._reload_award_names_by_rank()
+            self._reload_consignment_options()
+            self._reload_submission_options()
 
     def action_refresh_zvit(self):
         self.refresh_report()
@@ -425,7 +643,43 @@ class ZvitTab(Vertical):
 
         from setuptab_textual import ReportSettingsModal
         self.app.push_screen(ReportSettingsModal(self.conn, self))
-    
+
+    def _export_report(self, file_format: str) -> None:
+        """Экспортирует текущее содержимое таблицы отчёта."""
+        try:
+            table = self.query_one("#zvit-table", DataTable)
+            if not table.columns:
+                self.notify("Сначала сформируйте отчёт.", severity="warning")
+                return
+
+            headers = [
+                column.label.plain
+                if hasattr(column.label, "plain")
+                else str(column.label)
+                for column in table.columns.values()
+            ]
+
+            rows = []
+            for row_key in table.rows:
+                cells = table.get_row(row_key)
+                rows.append([
+                    cell.plain if hasattr(cell, "plain") else str(cell)
+                    for cell in cells
+                ])
+
+            if file_format == "csv":
+                path = export_report_csv(headers, rows)
+            elif file_format == "xlsx":
+                path = export_report_xlsx(headers, rows)
+            else:
+                self.notify(f"Неизвестный формат экспорта: {file_format}", severity="error")
+                return
+
+            self.notify(f"Файл сохранён: {path}")
+
+        except (OSError, RuntimeError, ValueError) as exc:
+            self.notify(f"Ошибка экспорта: {exc}", severity="error", timeout=10)
+
     BINDINGS: ClassVar[list[tuple[str, str, str]]] = [
         ("f4", "open_report_settings", "Налаштування звітів"),
         ("f5", "refresh_zvit", "Оновити"),
