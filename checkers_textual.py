@@ -4,6 +4,7 @@ import copy
 import json
 import os
 from pathlib import Path
+
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.widgets import Button, Input, Label, RichLog, Static
@@ -61,7 +62,7 @@ class CheckersWidget(Horizontal):
             with open(SAVE_FILE, "w") as f:
                 json.dump(data, f)
             self.log_message("[green][СИСТЕМА] Гру збережено![/green]")
-        except Exception as e:
+        except (OSError, TypeError, ValueError) as e:
             self.log_message(f"[red]Помилка збереження: {e}[/red]")
 
     def load_game(self):
@@ -71,7 +72,7 @@ class CheckersWidget(Horizontal):
             with open(SAVE_FILE, "r") as f:
                 data = json.load(f)
             return data["board"], data["turn"]
-        except Exception:
+        except (OSError, json.JSONDecodeError, KeyError, TypeError):
             return None, None
 
     def to_chess_coords(self, row, col):
@@ -106,14 +107,19 @@ class CheckersWidget(Horizontal):
                             if not is_white and dr < 0: continue
                         
                         nr, nc = r + dr, c + dc
-                        if 0 <= nr < BOARD_SIZE and 0 <= nc < BOARD_SIZE:
-                            if board[nr][nc] == EMPTY:
-                                moves.append(((r, c), (nr, nc)))
+                        if 0 <= nr < BOARD_SIZE and 0 <= nc < BOARD_SIZE and board[nr][nc] == EMPTY:
+                            moves.append(((r, c), (nr, nc)))
                         
                         jr, jc = r + 2*dr, c + 2*dc
-                        if 0 <= jr < BOARD_SIZE and 0 <= jc < BOARD_SIZE:
-                            if board[nr][nc] in enemies and board[jr][jc] == EMPTY:
-                                jumps.append(((r, c), (jr, jc), (nr, nc)))
+
+                        if (
+                            0 <= jr < BOARD_SIZE
+                            and 0 <= jc < BOARD_SIZE
+                            and board[nr][nc] in enemies
+                            and board[jr][jc] == EMPTY
+                        ):
+                            jumps.append(((r, c), (jr, jc), (nr, nc)))
+        
         return jumps if jumps else moves
 
     def make_move(self, board, move):
@@ -208,7 +214,7 @@ class CheckersWidget(Horizontal):
                 f_self.log_message(f"[cyan]{i}: {start} -> {end} {is_jump}[/cyan]")
         else:
             f_self.log_message("\n[yellow]ШІ думає...[/yellow]")
-            score, move = f_self.minimax(f_self.board, 4, float('-inf'), float('inf'), True)
+            _, move = f_self.minimax(f_self.board, 4, float('-inf'), float('inf'), True)
             if move is not None:
                 f_self.board = f_self.make_move(f_self.board, move)
                 f_self.log_message(f"ШІ зробив хід: {f_self.to_chess_coords(move[0][0], move[0][1])} -> {f_self.to_chess_coords(move[1][0], move[1][1])}")

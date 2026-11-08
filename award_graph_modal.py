@@ -66,16 +66,9 @@ class AwardGraphScreen(ModalScreen[None]):
         output = Text()
         output.append("Рік     Нагороди\n", style="bold underline")
         
-        target_line_index = 0
-        current_line = 1 # враховуємо заголовок
-
         for year, state_n, all_n, pres_n in zip(years, state, all_awards, presentations):
             is_selected = (year == selected_year)
             marker = "▶ " if is_selected else "  "
-            
-            if is_selected:
-                target_line_index = current_line
-
             output.append(f"{marker}{year}  ", style="bold green" if is_selected else "")
             output.append("█" * round(all_n / max_value * width), style="red")
             output.append(f" {all_n} усі нагороди\n")
@@ -85,7 +78,6 @@ class AwardGraphScreen(ModalScreen[None]):
             output.append("        ")
             output.append("█" * round(pres_n / max_value * width), style="green")
             output.append(f" {pres_n} подання\n\n")
-            current_line += 4
 
         chart_widget = self.query_one("#graph-chart", Static)
         chart_widget.update(output)

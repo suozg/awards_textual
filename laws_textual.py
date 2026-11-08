@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import webbrowser
 from datetime import datetime
+
+from sqlcipher3 import dbapi2 as sqlite3
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
-from textual.widgets import Button, DataTable, Input, Label, Static, Checkbox
+from textual.widgets import Button, Checkbox, DataTable, Input, Label, Static
 
 
 class LawEditScreen(ModalScreen[bool]):
@@ -56,8 +58,11 @@ class LawEditScreen(ModalScreen[bool]):
                     self.query_one("#law-link", Input).value = row[1] or ""
                     self.query_one("#law-number", Input).value = row[2] or ""
                     self.query_one("#law-date", Input).value = row[3] or ""
-            except Exception as exc:
-                self.query_one("#law-edit-error", Static).update(f"Помилка завантаження: {exc}")
+
+            except sqlite3.Error as exc:
+                self.query_one("#law-edit-error", Static).update(
+                    f"Помилка завантаження: {exc}"
+                )
         self.query_one("#law-number", Input).focus()
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
@@ -104,8 +109,11 @@ class LawEditScreen(ModalScreen[bool]):
             self.dismiss(True)
         except ValueError:
             self.query_one("#law-edit-error", Static).update("Невірний формат дати. Використовуйте РРРР-ММ-ДД.")
-        except Exception as exc:
-            self.query_one("#law-edit-error", Static).update(f"Помилка збереження: {exc}")
+        except sqlite3.Error as exc:
+            self.conn.rollback()
+            self.query_one("#law-edit-error", Static).update(
+                f"Помилка збереження: {exc}"
+            )
 
 
 class LawsTab(Vertical):
@@ -141,8 +149,11 @@ class LawsTab(Vertical):
             rows = self.cursor.fetchall()
             for row in rows:
                 table.add_row(row[4] or "", row[1] or "", row[2] or "", key=str(row[0]))
-        except Exception as exc:
-            self.app.notify(f"Помилка завантаження законів: {exc}", severity="error")
+        except sqlite3.Error as exc:
+            self.app.notify(
+                f"Помилка завантаження законів: {exc}",
+                severity="error",
+            )
 
     def open_edit_dialog(self, law_id: int | None = None) -> None:
         def check_result(result: bool | None) -> None:
@@ -166,9 +177,15 @@ class LawsTab(Vertical):
         """Відкриває посилання в браузері при натисканні Enter на рядку."""
         law_id = int(event.row_key.value)
         try:
-            self.cursor.execute("SELECT law_link FROM law WHERE id_law = ?", (law_id,))
+            self.cursor.execute(
+                "SELECT law_link FROM law WHERE id_law = ?",
+                (law_id,),
+            )
             row = self.cursor.fetchone()
             if row and row[0]:
                 webbrowser.open(row[0])
-        except Exception as exc:
-            self.app.notify(f"Не вдалося відкрити посилання: {exc}", severity="error")
+        except (sqlite3.Error, OSError, webbrowser.Error) as exc:
+            self.app.notify(
+                f"Не вдалося відкрити посилання: {exc}",
+                severity="error",
+            )

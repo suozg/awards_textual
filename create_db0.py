@@ -1,13 +1,9 @@
 # create_db0.py
-import re
-from datetime import datetime, timedelta
-from collections import defaultdict
-from itertools import chain
-import io
+import base64
 import os
-from PIL import Image
-from sqlcipher3 import dbapi2 as sqlite3 
-import base64      
+
+from sqlcipher3 import dbapi2 as sqlite3
+
 
 # ---------------------------------- СЮДА НЕ ЛЕЗТЬ ----------------------------------------
 def is_database_existing(path):
@@ -23,8 +19,10 @@ def create_database(database_file_path, passwd):
 
         # Create a cursor object to interact with the database
         cursor = db.cursor()
+        # екрануємо пароль
+        escaped_passwd = passwd.replace("'", "''")
+        cursor.execute(f"PRAGMA key = '{escaped_passwd}';") 
         # SQLCipher 3 совместимость
-        cursor.execute(f"PRAGMA key = '{passwd}';")
         cursor.execute("PRAGMA cipher_compatibility = 3;")
         cursor.execute("PRAGMA kdf_iter = 64000;")
 

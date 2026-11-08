@@ -1,18 +1,21 @@
+# zvity_textual.py
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, ClassVar
 
+from sqlcipher3 import dbapi2 as sqlite3
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
+from textual.css.query import NoMatches
 from textual.widgets import Button, Checkbox, DataTable, Input, Label, Select, Static
 
 from config import START_YEAR
 from database_logic_textual import (
+    RankingValues,
     get_formatted_unique_awarded_distinctions,
     get_units_and_ranks,
 )
-
 
 PERSON_CATEGORY_ALL = 6
 AWARD_HANDOVER_STATUS_REMAINING = 1
@@ -46,6 +49,7 @@ class ZvitTab(Vertical):
                 ("Сержанти", 2),
                 ("Солдати", 3),
                 ("Військові", 4),
+                ("Цивільні", "civilian"),
             ],
             value=PERSON_CATEGORY_ALL,
             id="zvit-person-category",
@@ -56,7 +60,6 @@ class ZvitTab(Vertical):
 
         self.all_time = Checkbox("увесь час", value=False, id="zvit-all-time")
         self.posthumous = Checkbox("посмертно", value=False, id="zvit-posthumous")
-        self.civilian = Checkbox("= цивільні", value=False, id="zvit-civilian")
         self.by_name = Checkbox("ранг / назва", value=False, id="zvit-by-name")
         self.issue_protocols = Checkbox("відсутні протоколи видачі", value=False, id="zvit-issue-protocols")
         self.specific_submission = Checkbox("окреме подання", value=False, id="zvit-specific-submission")
@@ -105,7 +108,6 @@ class ZvitTab(Vertical):
                 yield self.person_category
                 yield Label("підрозділ:", classes="zvit-label")
                 yield self.unit
-                yield self.civilian
 
             with Horizontal(id="zvit-award-row"):
                 yield Label("нагорода:", classes="zvit-label")
@@ -121,14 +123,17 @@ class ZvitTab(Vertical):
                 yield self.issue_protocols
                 yield self.specific_submission
                 yield Button("Сформувати", variant="primary", id="zvit-refresh")
+                yield Button("CSV", id="zvit-export-csv")
+                yield Button("XLSX", id="zvit-export-xlsx")
 
             yield DataTable(id="zvit-table", zebra_stripes=True)
             yield Static("Для створення звіту оберіть параметри та натисніть кнопку Оновити", id="zvit-footer")
 
     def on_mount(self) -> None:
-        self._load_reference_data()
-        self._apply_ui_state()
-        self.refresh_report()
+        if self.cursor:
+            self._load_reference_data()
+            self._apply_ui_state()
+            self.refresh_report()
 
     def _default_start(self) -> str:
         year = max(START_YEAR, datetime.now().year)
@@ -145,25 +150,29 @@ class ZvitTab(Vertical):
             return
 
         try:
-            ranks, units = get_units_and_ranks(self.cursor)
-            self.award_rank.options = [("Усі", "")] + [(rank, rank) for rank in ranks]
+            _, units = get_units_and_ranks(self.cursor)
+
+            self.award_rank.options = [
+                ("Усі", ""),
+                *[(rank, rank) for rank in RankingValues if rank],
+            ]
+            self.notify(str(self.award_rank.options))
             self.unit.options = [("Усі", "")] + [(unit, unit) for unit in units]
 
             names = get_formatted_unique_awarded_distinctions(self.cursor)
             self.award_name.options = [("Усі", "")] + [(name, name) for name in names]
-        except Exception:
+        except RuntimeError:
             self.award_rank.options = [("Усі", "")]
             self.unit.options = [("Усі", "")]
             self.award_name.options = [("Усі", "")]
-
         self.award_rank.value = ""
         self.unit.value = ""
         self.award_name.value = ""
 
     def _apply_ui_state(self):
-        self.award_rank.disabled = self.by_name.value
+        self.award_rank.disabled = False
         self.award_name.disabled = not self.by_name.value
-        self.unit.disabled = self.civilian.value
+        self.unit.disabled = self.person_category.value == "civilian"
 
         if self.by_name.value:
             self._reload_award_names_by_rank()
@@ -177,7 +186,7 @@ class ZvitTab(Vertical):
             names = get_formatted_unique_awarded_distinctions(self.cursor, rank_filter=rank_filter or None)
             self.award_name.options = [("Усі", "")] + [(name, name) for name in names]
             self.award_name.value = ""
-        except Exception:
+        except RuntimeError:
             self.award_name.options = [("Усі", "")]
             self.award_name.value = ""
 
@@ -185,7 +194,7 @@ class ZvitTab(Vertical):
         return {
             "all_time": self.all_time.value,
             "posthumous": self.posthumous.value,
-            "civilian": self.civilian.value,
+            "civilian": self.person_category.value == "civilian",
             "by_name": self.by_name.value,
             "issue_protocols": self.issue_protocols.value,
             "specific_submission": self.specific_submission.value,
@@ -224,7 +233,7 @@ class ZvitTab(Vertical):
                 table.add_row(*[str(value) if value is not None else "" for value in row])
 
             self._set_footer(f"Знайдено записів: {len(rows)}")
-        except Exception as exc:
+        except NoMatches as exc:
             self._set_footer(f"Помилка: {exc}")
 
     def _fetch_rows(self):
@@ -267,12 +276,15 @@ class ZvitTab(Vertical):
         if filters["issue_protocols"]:
             query += " AND (m.handover IS NULL OR TRIM(m.handover) = '')"
 
-        if filters["person_category"] not in (None, "", PERSON_CATEGORY_ALL):
+        if filters["civilian"]:
+            query += " AND (p.rank IS NULL OR TRIM(p.rank) = '')"
+
+        elif filters["person_category"] not in (None, "", PERSON_CATEGORY_ALL):
             category = int(filters["person_category"])
             query += " AND p.id IN (SELECT id FROM personality WHERE category = ?)"
             params.append(category)
 
-        if filters["unit"] not in (None, ""):
+        if not filters["civilian"] and filters["unit"] not in (None, ""):
             query += " AND p.unit = ?"
             params.append(filters["unit"])
 
@@ -280,10 +292,9 @@ class ZvitTab(Vertical):
             query += " AND a.ranking = ?"
             params.append(filters["award_rank"])
 
-        if filters["award_name"] not in (None, ""):
-            if filters["by_name"]:
-                query += " AND a.denotation = ?"
-                params.append(filters["award_name"])
+        if filters["award_name"] not in (None, "") and filters["by_name"]:
+            query += " AND a.denotation = ?"
+            params.append(filters["award_name"])
 
         worker = filters["worker"]
         if worker not in (None, ""):
@@ -312,14 +323,11 @@ class ZvitTab(Vertical):
         try:
             self.cursor.execute(query, params)
             return self.cursor.fetchall()
-        except Exception:
+        except sqlite3.Error:
             return []
 
     def _set_footer(self, message: str):
-        try:
-            self.query_one("#zvit-footer", Static).update(message)
-        except Exception:
-            pass
+        self.query_one("#zvit-footer", Static).update(message)
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "zvit-refresh":
@@ -329,7 +337,6 @@ class ZvitTab(Vertical):
         if event.checkbox.id in {
             "zvit-all-time",
             "zvit-posthumous",
-            "zvit-civilian",
             "zvit-by-name",
             "zvit-issue-protocols",
             "zvit-specific-submission",
@@ -337,7 +344,10 @@ class ZvitTab(Vertical):
             self._apply_ui_state()
 
     def on_select_changed(self, event):
-        if event.select.id == "zvit-award-rank" and self.by_name.value:
+        if event.select.id == "zvit-person-category":
+            self._apply_ui_state()
+
+        elif event.select.id == "zvit-award-rank" and self.by_name.value:
             self._reload_award_names_by_rank()
 
     def action_refresh_zvit(self):
@@ -350,8 +360,8 @@ class ZvitTab(Vertical):
 
         from setuptab_textual import ReportSettingsModal
         self.app.push_screen(ReportSettingsModal(self.conn, self))
-
-    BINDINGS = [
+    
+    BINDINGS: ClassVar[list[tuple[str, str, str]]] = [
         ("f4", "open_report_settings", "Налаштування звітів"),
         ("f5", "refresh_zvit", "Оновити"),
     ]

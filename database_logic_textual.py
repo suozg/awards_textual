@@ -1,14 +1,11 @@
+# database_logic.py
 """Функції пошуку та статистики AWARDS 53 без залежності від wxPython.
 """
-# database_logic.py
 import re
-from datetime import datetime, timedelta
 from collections import defaultdict
-from itertools import chain
-import io
-import os
-from PIL import Image
-from sqlcipher3 import dbapi2 as sqlite3 
+from datetime import datetime, timedelta
+
+from sqlcipher3 import dbapi2 as sqlite3
 
 RankingValues = ["", "Найвища", "Державні", "Від центральних ов", "Відомчі", "Від місцевих ов", "Від керівництва", "Інші"]
 
@@ -18,7 +15,9 @@ def connect_to_database(passwd, database_file_path):
     try:
         conn = sqlite3.connect(database_file_path)
         cursor = conn.cursor()
-        cursor.execute(f"PRAGMA key = '{passwd}';")
+        # екрануємо пароль 
+        escaped_passwd = passwd.replace("'", "''")
+        cursor.execute(f"PRAGMA key = '{escaped_passwd}';")
         # SQLCipher 3 сумісність
         cursor.execute("PRAGMA cipher_compatibility = 3;")  
         cursor.execute("PRAGMA kdf_iter = 64000;")
@@ -34,7 +33,10 @@ def connect_to_database(passwd, database_file_path):
         if cursor.fetchall():
             conn.create_function("LOWER", 1, sqlite_lower)
             return conn, cursor
-    except Exception as e:
+
+        return None, None # если таблиц нет. Тогда функция тоже вернёт пару значений, как и при ошибке подключения.
+    
+    except sqlite3.Error as e:
         print("Помилка підключення до бази:", e)
         return None, None
 
@@ -49,30 +51,26 @@ def is_tipa_inn(value):
     return bool(re.fullmatch(r"\d{10}", value))  # РНОКПП повинен містити 10 цифр
 
 
-# --- Функція для обробки ІНН ---
 def is_valid_INN(inn):
     """ Перевірка РНОКПП та обчислення дати народження """
     if re.fullmatch(r"\d{10}", inn):
-        try:
-            digits = [int(ch) for ch in inn]
+        digits = [int(ch) for ch in inn]
 
-            k1 = (digits[0]*-1) + (digits[1]*5) + (digits[2]*7) + (digits[3]*9) + \
-                 (digits[4]*4) + (digits[5]*6) + (digits[6]*10) + (digits[7]*5) + (digits[8]*7)
-            k2 = k1 % 11
-            k3 = 0 if k2 == 10 else k2
+        k1 = (digits[0]*-1) + (digits[1]*5) + (digits[2]*7) + (digits[3]*9) + \
+             (digits[4]*4) + (digits[5]*6) + (digits[6]*10) + (digits[7]*5) + (digits[8]*7)
+        k2 = k1 % 11
+        k3 = 0 if k2 == 10 else k2
 
-            if digits[9] == k3:
-                days_to_add = int(inn[:5])
-                start_date = datetime(1899, 12, 31)
-                date_and_delta = start_date + timedelta(days=days_to_add)
-                birth_date = date_and_delta.strftime("%Y-%m-%d")
-                return birth_date
-            else:
-                return ""
-        except Exception as e:
+        if digits[9] == k3:
+            days_to_add = int(inn[:5])
+            start_date = datetime(1899, 12, 31)
+            date_and_delta = start_date + timedelta(days=days_to_add)
+            birth_date = date_and_delta.strftime("%Y-%m-%d")
+            return birth_date
+        else:
             return ""
-            
     return ""
+
 
 def _get_formatted_inn_display(raw_inn_value):
     """
@@ -103,19 +101,23 @@ def execute_query(cursor, query, params=None):
     cursor.execute(query, params or {})
     return cursor.fetchall()
 
-
 # сервісні дані
 def get_service_settings_data(cursor):
     if not cursor:
         return None
     try:
-        query = "SELECT logo, exel_butt, view_butt, or_butt, zvit_dir, zvit_fields, show_hellou, id, pass, cookies, img_homer, img_homer2, last_time_changes FROM service_ LIMIT 1"
+        query = """
+            SELECT logo, exel_butt, view_butt, or_butt, zvit_dir,
+                   zvit_fields, show_hellou, id, pass, cookies,
+                   img_homer, img_homer2, last_time_changes
+            FROM service_
+            LIMIT 1
+        """
         cursor.execute(query)
         settings_row = cursor.fetchone()
         return settings_row
-    except Exception as e:
+    except sqlite3.Error:
         return None
-
 
 # ------------------------ запит пошуку -------------------------------------
 def search_q(query, cursor, search_id=None):
@@ -297,7 +299,7 @@ def get_award_image_blobs_for_search(imgList, counts_gid01, cursor):
             if blob is not None and isinstance(blob, bytes):
                 final_blobs.append(blob)
         return final_blobs
-    except Exception:
+    except sqlite3.Error:
         return []
 
 
@@ -515,14 +517,14 @@ def get_units_and_ranks(cursor):
             if row and row[1] is not None and str(row[1]).strip():
                 unique_units_set.add(str(row[1]).strip())
 
-        loaded_ranks = sorted(list(unique_ranks_set))
-        loaded_units.extend(sorted(list(unique_units_set)))
-
+        loaded_ranks = sorted(unique_ranks_set)
+        loaded_units.extend(sorted(unique_units_set))
         return (loaded_ranks, loaded_units)
 
-    except Exception as e:
-        raise RuntimeError(f"Помилка бази даних при завантаженні підрозділів та рангів: {e}")
-
+    except sqlite3.Error as e:
+        raise RuntimeError(
+            f"Помилка бази даних при завантаженні підрозділів та рангів: {e}"
+        ) from e
 
 def get_treedata(cursor):
     if not cursor:
@@ -536,9 +538,8 @@ def get_treedata(cursor):
             award_id, award_name, law_desc, grounds_desc, image_data, ranking = row
             ranking_description = "Невідоме ранжирування"
 
-            if isinstance(ranking, int):
-                if 0 <= ranking < len(RankingValues):
-                    ranking_description = RankingValues[ranking]
+            if isinstance(ranking, int) and 0 <= ranking < len(RankingValues):
+                ranking_description = RankingValues[ranking]
 
             if ranking_description not in awards_data:
                 awards_data[ranking_description] = {}
@@ -584,8 +585,6 @@ def save_award_to_db(conn, cursor, award_id, award_name, short_desc, full_desc, 
         if conn:
             conn.rollback()
         return False
-    except Exception:
-        return False
 
 
 def create_award_in_db(conn, cursor, category_name, award_name, short_desc, full_desc, image_data, ranking):
@@ -614,7 +613,6 @@ def delete_award_from_db(conn, cursor, award_id):
 
 
 def get_formatted_unique_awarded_distinctions(cursor, rank_filter=None):
-    formatted_list = []
     unique_formatted_list = []
 
     rank_number_filter = None
@@ -647,8 +645,10 @@ def get_formatted_unique_awarded_distinctions(cursor, rank_filter=None):
 
         return unique_formatted_list
 
-    except Exception as e:
-        raise RuntimeError(f"Помилка бази даних при завантаженні та формуванні списку нагород: {e}")
+    except sqlite3.Error as e:
+        raise RuntimeError(
+            f"Помилка бази даних при завантаженні та формуванні списку нагород: {e}"
+        ) from e
 
 
 def search_presentations(cursor, query):

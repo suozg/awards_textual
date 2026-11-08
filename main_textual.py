@@ -1,30 +1,39 @@
 """Textual-порт AWARDS 53."""
 from __future__ import annotations
+
 import argparse
 import csv
-import sys
 from pathlib import Path
+from typing import ClassVar
 
 from sqlcipher3 import dbapi2 as sqlite3
 from textual.app import App, ComposeResult
-from textual.containers import Horizontal, Vertical, VerticalScroll
+from textual.containers import Horizontal, Vertical
+from textual.css.query import NoMatches
 from textual.screen import ModalScreen, Screen
 from textual.theme import Theme
 from textual.widgets import (
-    Button, DataTable, Footer, Input, Label, Static,
-    TabbedContent, TabPane, TextArea,
+    Button,
+    DataTable,
+    Footer,
+    Input,
+    Label,
+    Static,
+    TabbedContent,
+    TabPane,
+    TextArea,
 )
 
-from config import DATABASE_FILE_PATH, MASTERKEY, TITLE_PROG, VERSION
-
-from dovidnyk_textual import DovidnykTab
-from search_tab_textual import SearchTab
-from kartka_textual import KartkaTab
-from text_panel_textual import TextPanel
-from laws_textual import LawsTab, LawEditScreen
 from checkers_textual import CheckersWidget
-from zvity_textual import ZvitTab
+from config import DATABASE_FILE_PATH, MASTERKEY, TITLE_PROG, VERSION
+from dovidnyk_textual import DovidnykTab
+from kartka_textual import KartkaTab
+from laws_textual import LawsTab
+from search_tab_textual import SearchTab
 from setuptab_textual import SettingsTab
+from text_panel_textual import TextPanel
+from zvity_textual import ZvitTab
+
 
 def connect_database(path: str, password: str):
     """Відкриває SQLCipher-базу в режимі сумісності з наявною БД."""
@@ -96,10 +105,9 @@ class LoginScreen(ModalScreen[tuple[str, object, object] | None]):
             conn, cur = connect_database(self.db_path, password)
             self._creation_needed = False
             self.dismiss((password, conn, cur))
-        except Exception as exc:
+        except (sqlite3.Error, OSError, RuntimeError, ImportError) as exc:
             self.query_one("#login-error", Static).update(f"Помилка: {exc}")
             self.query_one("#password", Input).focus()
-
 
 class SplashScreen(Screen):
     """Екран заставки з текстом по центру на час ініціалізації."""
@@ -111,11 +119,7 @@ class SplashScreen(Screen):
             yield Static("Підготовка робочого середовища...", id="splash-status", classes="splash-status")
 
     def update_status(self, text: str) -> None:
-        try:
-            self.query_one("#splash-status", Static).update(text)
-        except Exception:
-            pass
-
+        self.query_one("#splash-status", Static).update(text)
 
 class MainScreen(Screen):
     """Головний екран із вкладками (створюється лише після заставки)."""
@@ -136,30 +140,30 @@ class MainScreen(Screen):
                 yield LawsTab(id="laws-tab") 
             with TabPane("НАЛАШТУВАННЯ", id="tab-settings"):
                 yield SettingsTab(id="settings-tab")
-            with TabPane("SQL", id="tab-sql"):
-                with Vertical():
-                    yield Label("SQL-запит (Ctrl+Enter — виконати)")
-                    yield TextArea(id="sql-input")
-                    with Horizontal():
-                        yield Button("Виконати", variant="primary", id="sql-run")
-                        yield Button("EXPLAIN", id="sql-explain")
-                        yield Button("CSV", id="sql-csv")
-                    yield DataTable(id="sql-result", cursor_type="cell")
-            with TabPane("ПРО", id="tab-about"):
-                with Horizontal(classes="about-container"):
-                    with Vertical(classes="about-info-pane"):
-                        yield Label("AWARDS 53", classes="about-header")
-                        yield Static(
-                            f"Програма: [bold]{TITLE_PROG}[/bold]\n"
-                            f"Версія: [bold]{VERSION}[/bold]\n"
-                            "Архітектура: [italic]Textual Terminal UI[/italic]\n\n"
-                            "Система призначена для ведення обліку нагород, "
-                            "роботи з базами даних SQLCipher та нормативними актами.\n\n"
-                            "(c) 2026. Холодов О.В. [git/suozg]",
-                            classes="about-text"
-                        )
-                    with Vertical(classes="about-game-pane"):
-                        yield CheckersWidget(id="checkers-game")
+            with TabPane("SQL", id="tab-sql"), Vertical():
+                yield Label("SQL-запит (Ctrl+Enter — виконати)")
+                yield TextArea(id="sql-input")
+                with Horizontal():
+                    yield Button("Виконати", variant="primary", id="sql-run")
+                    yield Button("EXPLAIN", id="sql-explain")
+                    yield Button("CSV", id="sql-csv")
+                yield DataTable(id="sql-result", cursor_type="cell")
+
+            with TabPane("ПРО", id="tab-about"), Horizontal(classes="about-container"):
+                with Vertical(classes="about-info-pane"):
+                    yield Label("AWARDS 53", classes="about-header")
+                    yield Static(
+                        f"Програма: [bold]{TITLE_PROG}[/bold]\n"
+                        f"Версія: [bold]{VERSION}[/bold]\n"
+                        "Архітектура: [italic]Textual Terminal UI[/italic]\n\n"
+                        "Система призначена для ведення обліку нагород, "
+                        "роботи з базами даних SQLCipher та нормативними актами.\n\n"
+                        "(c) 2026. Холодов О.В. [git/suozg]",
+                        classes="about-text"
+                    )
+                with Vertical(classes="about-game-pane"):
+                    yield CheckersWidget(id="checkers-game")
+
         yield Footer()
 
 
@@ -167,7 +171,7 @@ class AwardsTextualApp(App):
     CSS_PATH = "styles.tcss" 
     TITLE = TITLE_PROG
     SUB_TITLE = f"Textual port · {VERSION}"
-    BINDINGS = [
+    BINDINGS: ClassVar[list[tuple[str, str, str]]] = [
         ("ctrl+q", "quit", "Вихід"),
         ("f6", "toggle_theme", "Перемкнути тему"),
     ]
@@ -240,7 +244,7 @@ class AwardsTextualApp(App):
             )
             self.call_from_thread(self._transition_to_main_screen)
 
-        except Exception as exc:
+        except Exception as exc: # noqa: BLE001
             self.call_from_thread(self._handle_init_error, str(exc))
 
     def _update_splash_status(self, message: str) -> None:
@@ -254,21 +258,27 @@ class AwardsTextualApp(App):
         self.call_after_refresh(self._initialize_search_tab)
 
     def _initialize_search_tab(self) -> None:
-        try:
-            main_screen = self.screen
-            if not isinstance(main_screen, MainScreen):
-                raise RuntimeError("Основний екран ще не активний.")
+        main_screen = self.screen
+        if not isinstance(main_screen, MainScreen):
+            self.notify(
+                "Основний екран ще не активний.",
+                severity="error",
+                timeout=10,
+            )
+            return
 
+        try:
             search_tab = main_screen.query_one("#search-tab", SearchTab)
             search_tab.set_database(self.conn, self.cursor)
             self._initialized_tabs.add("tab-search")
 
-        except Exception as exc:
+        except (NoMatches, sqlite3.Error, AttributeError) as exc:
             self.notify(
                 f"Помилка ініціалізації пошуку: {exc}",
                 severity="error",
                 timeout=10,
             )
+
 
     def on_tabbed_content_tab_activated(
         self, event: TabbedContent.TabActivated
@@ -317,7 +327,7 @@ class AwardsTextualApp(App):
             if tab_id == "tab-card":
                 self._sync_card_with_search()
 
-        except Exception as exc:
+        except Exception as exc: # noqa: BLE001
             self.notify(
                 f"Не вдалося ініціалізувати вкладку: {exc}",
                 severity="error",
@@ -348,7 +358,7 @@ class AwardsTextualApp(App):
                 "#kartka-tab", KartkaTab
             ).populate_and_load_search_results(results, source)
 
-        except Exception as exc:
+        except Exception as exc: # noqa: BLE001
             self.notify(
                 f"Помилка синхронізації картки: {exc}",
                 severity="error",
@@ -357,11 +367,6 @@ class AwardsTextualApp(App):
 
     def action_toggle_theme(self) -> None:
         self.theme = "gruvbox-light" if self.theme == "gruvbox-dark" else "gruvbox-dark"
-        theme_label = "світла Gruvbox" if self.theme == "gruvbox-light" else "темна Gruvbox"
-        try:
-            self.query_one("#status", Static).update(f"Тема: {theme_label} (F12 — перемкнути)")
-        except Exception:
-            pass
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "search-button":
@@ -374,30 +379,51 @@ class AwardsTextualApp(App):
             self.export_csv()
 
     def execute_sql(self, explain: bool = False) -> None:
+        main_screen = self.screen
+
+        if not isinstance(main_screen, MainScreen):
+            self.notify(
+                "Основний екран ще не активний.",
+                severity="error",
+            )
+            return
+
         try:
-            sql = self.query_one("#sql-input", TextArea).text.strip()
+            sql = main_screen.query_one("#sql-input", TextArea).text.strip()
             if not sql:
                 return
+
             if explain:
                 sql = "EXPLAIN QUERY PLAN " + sql
+
             self.cursor.execute(sql)
-            table = self.query_one("#sql-result", DataTable)
+
+            table = main_screen.query_one("#sql-result", DataTable)
             table.clear(columns=True)
+
             if self.cursor.description:
                 columns = [str(col[0]) for col in self.cursor.description]
                 table.add_columns(*columns)
+
                 for row in self.cursor.fetchall():
-                    table.add_row(*(str(value) if value is not None else "NULL" for value in row))
+                    table.add_row(
+                        *(str(value) if value is not None else "NULL" for value in row)
+                    )
             else:
                 self.conn.commit()
-                self.notify(f"Запит виконано. Змінено рядків: {self.cursor.rowcount}")
-            self.query_one("#status", Static).update("SQL: виконано")
-        except Exception as exc:
+                self.notify(
+                    f"Запит виконано. Змінено рядків: {self.cursor.rowcount}"
+                )
+
+        except (sqlite3.Error, NoMatches) as exc:
             self.notify(f"SQL: {exc}", severity="error", timeout=10)
 
     def export_csv(self) -> None:
         try:
-            table = self.query_one("#sql-result", DataTable)
+            main_screen = self.screen
+            if not isinstance(main_screen, MainScreen):
+                return
+            table = main_screen.query_one("#sql-result", DataTable)
             if not table.columns:
                 self.notify("Немає результатів для експорту.", severity="warning")
                 return
@@ -409,19 +435,24 @@ class AwardsTextualApp(App):
                 for row_key in table.rows:
                     writer.writerow([str(cell) for cell in table.get_row(row_key)])
             self.notify(f"CSV збережено: {path}")
-        except Exception as exc:
-            self.notify(f"Помилка експорту CSV: {exc}", severity="error")
+        except (OSError, sqlite3.Error, NoMatches) as exc:
+            self.notify(
+                f"Помилка експорту CSV: {exc}",
+                severity="error",
+            )
+
 
     def on_unmount(self) -> None:
         if self.cursor:
             try:
                 self.cursor.close()
-            except Exception:
+            except sqlite3.Error:
                 pass
+
         if self.conn:
             try:
                 self.conn.close()
-            except Exception:
+            except sqlite3.Error:
                 pass
 
 

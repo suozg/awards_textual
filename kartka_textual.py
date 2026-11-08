@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import base64
-from io import BytesIO
 import re
+from io import BytesIO
+
+from sqlcipher3 import dbapi2 as sqlite3
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
@@ -14,7 +16,7 @@ try:
 except ImportError:
     HAS_TEXTUAL_IMAGE = False
 
-from database_logic_textual import get_units_and_ranks, get_treedata, is_valid_INN
+from database_logic_textual import get_treedata, get_units_and_ranks, is_valid_INN
 
 
 class LinkDialogModal(ModalScreen[int | None]):
@@ -79,8 +81,12 @@ class LinkDialogModal(ModalScreen[int | None]):
                 f"Знайдено записів ({label_str}): {len(rows)}"
             )
             self.query_one("#link-select", Select).set_options(options)
-        except Exception as exc:
-            self.notify(f"Помилка завантаження даних для прив'язки: {exc}", severity="error")
+
+        except sqlite3.Error as exc:
+            self.notify(
+                f"Помилка завантаження даних для прив'язки: {exc}",
+                severity="error",
+            )
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "cancel-btn":
@@ -107,10 +113,9 @@ class LinkDialogModal(ModalScreen[int | None]):
                 )
             self.conn.commit()
             self.dismiss(int(selected_id))
-        except Exception as exc:
+        except sqlite3.Error as exc:
             self.conn.rollback()
             self.notify(f"Помилка прив'язки: {exc}", severity="error")
-
 
 class KartkaTab(VerticalScroll):
     """Вкладка «Картка» для редагування даних особи, подань і нагороджень."""
@@ -135,10 +140,13 @@ class KartkaTab(VerticalScroll):
 
         # --- Завантаження дефолтного зображення (заглушки) ---
         self.default_award_image_bytes = None
-        if self.settings_manager and hasattr(self.settings_manager, 'is_loaded') and self.settings_manager.is_loaded:
-            if hasattr(self.settings_manager, 'get_logo_blob'):
-                self.default_award_image_bytes = self.settings_manager.get_logo_blob()
-        
+        if (
+            self.settings_manager
+            and hasattr(self.settings_manager, "is_loaded")
+            and self.settings_manager.is_loaded
+            and hasattr(self.settings_manager, "get_logo_blob")
+        ):
+            self.default_award_image_bytes = self.settings_manager.get_logo_blob()       
 
     def compose(self) -> ComposeResult:
         with Vertical(classes="box"):
@@ -266,8 +274,11 @@ class KartkaTab(VerticalScroll):
             self.query_one("#award-select", Select).set_options(
                 [(name, name) for name in self._loaded_award_names]
             )
-        except Exception as exc:
-            self.notify(f"Помилка завантаження довідників: {exc}", severity="error")
+        except (sqlite3.Error, RuntimeError, KeyError, TypeError, AttributeError) as exc:
+            self.notify(
+                f"Помилка завантаження довідників: {exc}",
+                severity="error",
+            )
 
     def populate_and_load_search_results(self, person_ids_list, source_data_award_and_presentation) -> None:
         self.latest_search_person_ids_list = person_ids_list or []
@@ -333,7 +344,7 @@ class KartkaTab(VerticalScroll):
                         else:
                             binary_data = target_image_data
                         image_widget.image = BytesIO(binary_data)
-                    except Exception as e:
+                    except (ValueError, TypeError, OSError):
                         image_widget.image = None
                 elif isinstance(image_widget, Static):
                     image_widget.update("Зображення є в базі.")
@@ -365,8 +376,7 @@ class KartkaTab(VerticalScroll):
         self.query_one("#handover-date", Input).value = str(raw[5] or "")
         handover = str(raw[6] or "")
         self.query_one("#protok-handing", Checkbox).value = handover.endswith("$")
-        self.query_one("#handover-name", Input).value = handover[:-1] if handover.endswith("$") else handover
-
+        self.query_one("#handover-name", Input).value = handover.removesuffix("$")
         # Зв'язок із поданням
         linked_pres_index = next((i for i, p in enumerate(self.presentations_list) if p[7] == self.current_meed_id), None)
         goto_pres_btn = self.query_one("#goto-pres-btn", Button)
@@ -395,7 +405,7 @@ class KartkaTab(VerticalScroll):
                     else:
                         binary_data = image_data
                     image_widget.image = BytesIO(binary_data)
-                except Exception as e:
+                except (ValueError, TypeError, OSError):
                     image_widget.image = None
             elif isinstance(image_widget, Static):
                 image_widget.update("Зображення є в базі.")
@@ -565,7 +575,7 @@ class KartkaTab(VerticalScroll):
                     else:
                         binary_data = self.default_award_image_bytes
                     image_widget.image = BytesIO(binary_data)
-                except Exception:
+                except (ValueError, TypeError, OSError):
                     image_widget.image = None
             else:
                 image_widget.image = None
@@ -592,13 +602,12 @@ class KartkaTab(VerticalScroll):
                     self.show_card_screen("meed")
                 else:
                     self.notify("Нагородження не знайдено в списку.", severity="warning")
-        elif event.button.id == "goto-pres-btn":
-            if self.current_meed_id:
-                matched_pres_index = next((i for i, p in enumerate(self.presentations_list) if p[7] == self.current_meed_id), None)
-                if matched_pres_index is not None:
-                    self.query_one("#pres-select", Select).value = matched_pres_index
-                    self.fill_submission_fields(matched_pres_index)
-                    self.show_card_screen("pres")
+        elif event.button.id == "goto-pres-btn" and self.current_meed_id:
+            matched_pres_index = next((i for i, p in enumerate(self.presentations_list) if p[7] == self.current_meed_id), None)
+            if matched_pres_index is not None:
+                self.query_one("#pres-select", Select).value = matched_pres_index
+                self.fill_submission_fields(matched_pres_index)
+                self.show_card_screen("pres")
 
     def on_checkbox_changed(self, event: Checkbox.Changed) -> None:
         if event.checkbox.id == "pres-posthumous":
@@ -627,7 +636,7 @@ class KartkaTab(VerticalScroll):
                 self.conn.commit()
                 self.notify("Видалення успішно виконано!", severity="information")
                 self.clear_person_data()
-            except Exception as exc:
+            except sqlite3.Error as exc:
                 self.conn.rollback()
                 self.notify(f"Помилка видалення: {exc}", severity="error")
             return
@@ -736,6 +745,8 @@ class KartkaTab(VerticalScroll):
                         self.notify("Записи успішно пов'язано!", severity="information")
                 self.app.push_screen(modal, check_modal)
             self.notify("Операція збереження завершена.", severity="information")
-        except Exception as exc:
+        except sqlite3.Error as exc:
             self.conn.rollback()
             self.notify(f"Помилка збереження: {exc}", severity="error")
+
+            

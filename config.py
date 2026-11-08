@@ -1,12 +1,9 @@
 # config.py
 
 # --------- Параметри для роботи програми
-MASTERKEY = "1" # заменить на None после отладки
-SHOW_MORE_IMAGES = None # виводим одно или несколько изображений наград в TAB1
+MASTERKEY = '1' # заменить на None после отладки
 DATABASE_FILE_PATH = 'awards_v4e.db' # шлях до бази даних
 START_YEAR = 2014
-DEF_FUT_LABEL = "Готово"  # Дефолтное сообщение в статусбаре
-SHOW_MORE_IMAGES = 1
 DEFAULT_FRAME_SIZE = (900, 700)
 TITLE_PROG = "AWARDS 53 SMB LF AFU"
 VERSION = "4.1"

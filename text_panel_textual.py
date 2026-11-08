@@ -1,12 +1,13 @@
 """Textual-версія вкладки повнотекстового пошуку подань."""
 from __future__ import annotations
 
+from sqlcipher3 import dbapi2 as sqlite3
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
-from textual.widgets import Button, DataTable, Input, Static, TextArea
+from textual.css.query import NoMatches
+from textual.widgets import Button, DataTable, Input, TextArea
 
-from config import DEF_FUT_LABEL
-from database_logic_textual import search_presentations, get_presentation_info
+from database_logic_textual import search_presentations
 
 
 class TextPanel(Vertical):
@@ -48,7 +49,6 @@ class TextPanel(Vertical):
         super().__init__(**kwargs)
         self.conn = conn
         self.cursor = cursor
-        self.last_message = DEF_FUT_LABEL
         self.results = []
         self._row_by_id = {}
 
@@ -63,7 +63,8 @@ class TextPanel(Vertical):
 
     def on_mount(self) -> None:
         table = self.query_one("#text-presentation-list", DataTable)
-        table.add_columns("ID подання")
+        table.add_columns("№", "Дата", "Статус")
+
 
     def set_database(self, conn, cursor) -> None:
         self.conn, self.cursor = conn, cursor
@@ -93,32 +94,74 @@ class TextPanel(Vertical):
 
         try:
             status, results, message = search_presentations(self.cursor, query)
-        except Exception as exc:
+
+            if status == "EMPTY":
+                body.load_text(self.HELP_TEXT)
+                self._notify(message, "warning")
+                return
+
+            if status == "ERROR":
+                self._notify(message, "error")
+                return
+
+            self.results = results or []
+
+            presentation_ids = []
+            for row in self.results:
+                try:
+                    presentation_ids.append(int(row[0]))
+                except (TypeError, ValueError, IndexError):
+                    continue
+
+            if not presentation_ids:
+                body.load_text("Не знайдено.\n\n────────────────────────")
+                return
+
+            placeholders = ",".join("?" for _ in presentation_ids)
+            self.cursor.execute(
+                f"""
+                SELECT id, registration, date_registration, id_meed
+                FROM presentation
+                WHERE id IN ({placeholders})
+                """,
+                presentation_ids,
+            )
+            presentation_info = {
+                row[0]: row[1:] for row in self.cursor.fetchall()
+            }
+
+            for row in self.results:
+                try:
+                    pres_id = int(row[0])
+                except (TypeError, ValueError, IndexError):
+                    continue
+
+                self._row_by_id[pres_id] = row
+
+                info = presentation_info.get(pres_id)
+                if info:
+                    registration, date, meed = info
+
+                    if meed is None:
+                        presentation_status = "НА РОЗГЛЯДІ"
+                    elif str(meed) == "0":
+                        presentation_status = "ВІДМОВЛЕНО"
+                    else:
+                        presentation_status = "ЗАДОВОЛЕНО"
+
+                    table.add_row(
+                        str(registration or pres_id),
+                        str(date or ""),
+                        presentation_status,
+                        key=str(pres_id),
+                    )
+
+        except sqlite3.Error as exc:
             self._notify(f"Помилка пошуку: {exc}", "error")
             return
 
-        if status == "EMPTY":
-            body.load_text(self.HELP_TEXT)
-            self._notify(message, "warning")
-            return
-        if status == "ERROR":
-            self._notify(message, "error")
-            return
-
-        self.results = results or []
-        for row in self.results:
-            try:
-                pres_id = int(row[0])
-            except (TypeError, ValueError, IndexError):
-                continue
-            self._row_by_id[pres_id] = row
-            table.add_row(str(pres_id), key=str(pres_id))
-
         if not self.results:
             body.load_text("Не знайдено.\n\n────────────────────────")
-            self._set_status("Текстів за запитом не знайдено.")
-        else:
-            self._set_status(message)
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         if event.data_table.id != "text-presentation-list" or event.row_key is None:
@@ -129,14 +172,7 @@ class TextPanel(Vertical):
             if row is None:
                 return
             self.query_one("#text-presentation-body", TextArea).load_text(str(row[1] or ""))
-            extra_info = get_presentation_info(self.cursor, pres_id)
-            if extra_info:
-                reg, date, meed = extra_info
-                refused = " (відмовлено)" if str(meed) == "0" else ""
-                self._set_status(f"[{pres_id}] Подання № {reg or ''} від {date or ''}{refused}")
-            else:
-                self._set_status(f"Подання ID {pres_id}")
-        except Exception as exc:
+        except (ValueError, NoMatches) as exc:
             self._notify(f"Не вдалося відкрити подання: {exc}", "error")
 
     def clear_search(self) -> None:
@@ -145,19 +181,7 @@ class TextPanel(Vertical):
         self.query_one("#text-presentation-body", TextArea).load_text(self.HELP_TEXT)
         self.results = []
         self._row_by_id = {}
-        self._set_status(DEF_FUT_LABEL)
         self.query_one("#text-search-query", Input).focus()
 
-    def get_footer_message(self) -> str:
-        return self.last_message
-
-    def _set_status(self, message: str) -> None:
-        self.last_message = message
-        try:
-            self.app.query_one("#status", Static).update(message)
-        except Exception:
-            pass
-
     def _notify(self, message: str, severity: str = "information") -> None:
-        self._set_status(message)
         self.app.notify(message, severity=severity)

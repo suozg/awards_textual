@@ -1,17 +1,25 @@
+# setuptab_textual.py
 from __future__ import annotations
 
-import base64
-from io import BytesIO
 import os
-import sqlite3
-from PIL import Image as PILImage, ImageOps
-from textual_image.widget import Image as TerminalImage
+from io import BytesIO
+
+from PIL import Image as PILImage
+from PIL import ImageOps
+from sqlcipher3 import dbapi2 as sqlite3
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
-from textual.widgets import Button, Checkbox, Input, Label, Select, Static
+from textual.css.query import NoMatches
 from textual.screen import ModalScreen
+from textual.widgets import Button, Checkbox, Input, Label, Select, Static
+from textual_image.widget import Image as TerminalImage
+
 from config import ALL_COLUMN_LABELS
-from database_logic_textual import get_units_and_ranks, get_service_settings_data, connect_to_database
+from database_logic_textual import (
+    connect_to_database,
+    get_service_settings_data,
+    get_units_and_ranks,
+)
 
 
 class ServiceSettingsIndices:
@@ -56,8 +64,11 @@ class ReportSettingsModal(ModalScreen[bool]):
         except (ValueError, TypeError) as exc:
             self.notify(f"Некоректні налаштування колонок звіту: {exc}", severity="error")
             self.report_flags = [0] * 15
-        except Exception as exc:
-            self.notify(f"Помилка завантаження налаштувань звітів: {exc}", severity="error")
+        except sqlite3.Error as exc:
+            self.notify(
+                f"Помилка завантаження налаштувань звітів: {exc}",
+                severity="error",
+            )
         finally:
             if cursor:
                 cursor.close()
@@ -127,7 +138,7 @@ class ReportSettingsModal(ModalScreen[bool]):
 
             self.notify("Налаштування звітів збережено.")
             self.dismiss(True)
-        except Exception as exc:
+        except sqlite3.Error as exc:
             self.conn.rollback()
             self.notify(f"Помилка збереження налаштувань звітів: {exc}", severity="error")
         finally:
@@ -150,7 +161,6 @@ class SettingsTab(VerticalScroll):
         self.kartka_panel = kartka_panel
         self.search_tab = search_tab
         self.info_panel = info_panel
-        self.last_footer_message = None
         self.logo_blob = None
 
         self._loaded_units = []
@@ -180,7 +190,7 @@ class SettingsTab(VerticalScroll):
             self.query_one("#settings-unit-select", Select).set_options(
                 [(unit, unit) for unit in self._loaded_units]
             )
-        except Exception as exc:
+        except NoMatches as exc:
             self.notify(
                 f"Помилка оновлення списків звань і підрозділів: {exc}",
                 severity="error",
@@ -247,7 +257,7 @@ class SettingsTab(VerticalScroll):
             if self.conn:
                 cursor = self.conn.cursor()
                 settings_row = get_service_settings_data(cursor)
-        except Exception as e:
+        except sqlite3.Error as e:
             self.notify(f"Помилка завантаження налаштувань: {e}", severity="error")
         finally:
             if cursor:
@@ -288,7 +298,7 @@ class SettingsTab(VerticalScroll):
         try:
             preview = self.query_one("#settings-logo-preview", TerminalImage)
             status = self.query_one("#settings-logo-status", Static)
-        except Exception:
+        except NoMatches:
             # Виджеты ещё не созданы.
             return
 
@@ -307,7 +317,7 @@ class SettingsTab(VerticalScroll):
 
             preview.image = image
             status.update("")
-        except Exception as exc:
+        except (OSError, ValueError, TypeError) as exc:
             status.update(f"Не вдалося показати логотип: {exc}")
 
     def _parse_zvit_fields(self):
@@ -344,7 +354,7 @@ class SettingsTab(VerticalScroll):
                 self._loaded_units = ["", "Створити >"] + units_sorted
                 ranks_sorted = sorted(self._loaded_ranks[2:]) if len(self._loaded_ranks) > 2 else []
                 self._loaded_ranks = ["", "Створити >"] + ranks_sorted
-        except Exception as e:
+        except (sqlite3.Error, RuntimeError) as e:
             self.notify(f"Помилка завантаження довідників: {e}", severity="error")
         finally:
             if cursor:
@@ -355,7 +365,7 @@ class SettingsTab(VerticalScroll):
         try:
             self.query_one("#settings-unit-select", Select).set_options([(u, u) for u in self._loaded_units])
             self.query_one("#settings-rank-select", Select).set_options([(r, r) for r in self._loaded_ranks])
-        except Exception:
+        except NoMatches:
             pass
         self.on_clear_global_vars()
         if self.kartka_panel and hasattr(self.kartka_panel, "refresh_data_after_change_setuptab"):
@@ -378,7 +388,7 @@ class SettingsTab(VerticalScroll):
                 unit_entry.value = str(sel_unit)
             elif sel_unit == "Створити >":
                 unit_entry.value = ""
-        except Exception:
+        except NoMatches:
             pass
 
     def on_select_changed(self, event: Select.Changed) -> None:
@@ -423,7 +433,7 @@ class SettingsTab(VerticalScroll):
                     self.kartka_panel.refresh_logo()
                 if self.tab4_panel and hasattr(self.tab4_panel, "refresh_tree"):
                     self.tab4_panel.refresh_tree()
-        except Exception as e:
+        except (OSError, sqlite3.Error) as e:
             self.notify(f"Помилка збереження логотипу: {e}", severity="error")
         finally:
             if cursor:
@@ -451,15 +461,16 @@ class SettingsTab(VerticalScroll):
             if temp_db is None or temp_cursor is None:
                 self.notify("Введено невірний старий пароль.", severity="error")
                 return
-
-            temp_cursor.execute(f"PRAGMA rekey = '{new_pass2}';")
+            # екрануємо пароль
+            escaped_new_pass = new_pass2.replace("'", "''")
+            temp_cursor.execute(f"PRAGMA rekey = '{escaped_new_pass}';")
             temp_db.commit()
             self.notify("Пароль бази даних успішно змінено. Перезапустіть програму.", severity="information")
 
             self.query_one("#settings-old-pass", Input).value = ""
             self.query_one("#settings-new-pass", Input).value = ""
             self.query_one("#settings-repeat-pass", Input).value = ""
-        except Exception as e:
+        except sqlite3.Error as e:
             self.notify(f"Помилка при зміні паролю: {e}", severity="error")
             if temp_db:
                 temp_db.rollback()
@@ -497,7 +508,7 @@ class SettingsTab(VerticalScroll):
                 self.notify("Налаштування колонок звіту успішно збережено.")
                 if self.tab4_panel and hasattr(self.tab4_panel, "refresh_tree"):
                     self.tab4_panel.refresh_tree()
-        except Exception as e:
+        except sqlite3.Error as e:
             if self.conn:
                 self.conn.rollback()
             self.notify(f"Помилка збереження налаштувань звіту: {e}", severity="error")
@@ -540,7 +551,7 @@ class SettingsTab(VerticalScroll):
                 self._refresh_global_libs_ui()
                 if self.tab4_panel and hasattr(self.tab4_panel, "refresh_tree"):
                     self.tab4_panel.refresh_tree()
-        except Exception as e:
+        except sqlite3.Error as e:
             if self.conn:
                 self.conn.rollback()
             self.notify(f"Помилка збереження довідників: {e}", severity="error")
@@ -556,5 +567,5 @@ class SettingsTab(VerticalScroll):
             self.query_one("#settings-unit-entry", Input).value = ""
             self.query_one("#settings-rank-delete", Checkbox).value = False
             self.query_one("#settings-unit-delete", Checkbox).value = False
-        except Exception:
+        except NoMatches:
             pass

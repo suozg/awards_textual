@@ -5,13 +5,13 @@ import json
 from io import BytesIO
 from pathlib import Path
 
-import textual_image.renderable  # Визначення графічних протоколів до запуску Textual
-from textual_image.widget import Image as TerminalImage
+import textual_image.renderable  # noqa: F401
+from sqlcipher3 import dbapi2 as sqlite3
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import Button, Input, Label, Select, Static, TextArea, Tree
-
+from textual_image.widget import Image as TerminalImage
 
 # Індекси відповідають наявному полю award.ranking. Не змінюємо таблицю award.
 RANKING_VALUES = [
@@ -30,7 +30,7 @@ class ConfirmDeleteScreen(ModalScreen[bool]):
     def compose(self) -> ComposeResult:
         with Vertical(id="confirm-box"):
             yield Static(self.message, id="confirm-message")
-            with Horizontal:
+            with Horizontal():
                 yield Button("Видалити", variant="error", id="confirm-yes")
                 yield Button("Скасувати", id="confirm-no")
 
@@ -75,20 +75,19 @@ class DovidnykTab(Vertical):
                         yield Button("Додати нагороду", id="add-award", variant="primary")
                         yield Button("Редагувати категорію", id="edit-category")
 
-                with Vertical(id="award-view"):
-                    with Horizontal(id="award-view-layout"):
-                        with Vertical(id="award-view-text"):
-                            yield Static("", id="award-view-name")
-                            yield Label("Опис нагороди", classes="field-label")
-                            yield TextArea(read_only=True, id="view-grounds")
-                            yield Label("Нормативний акт про заснування", classes="field-label")
-                            yield TextArea(read_only=True, id="view-law")
-                            # Кнопка редагування зафіксована в самому низу текстового блоку
-                            with Horizontal(classes="actions"):
-                                yield Button("Редагувати нагороду", id="edit-award", variant="primary")
-                        with Vertical(id="award-view-image-column"):
-                            yield TerminalImage(id="view-image-preview")
-                            yield Static("Зображення не завантажено.", id="view-image-status")
+                with Vertical(id="award-view"), Horizontal(id="award-view-layout"):
+                    with Vertical(id="award-view-text"):
+                        yield Static("", id="award-view-name")
+                        yield Label("Опис нагороди", classes="field-label")
+                        yield TextArea(read_only=True, id="view-grounds")
+                        yield Label("Нормативний акт про заснування", classes="field-label")
+                        yield TextArea(read_only=True, id="view-law")
+                        # Кнопка редагування зафіксована в самому низу текстового блоку
+                        with Horizontal(classes="actions"):
+                            yield Button("Редагувати нагороду", id="edit-award", variant="primary")
+                    with Vertical(id="award-view-image-column"):
+                        yield TerminalImage(id="view-image-preview")
+                        yield Static("Зображення не завантажено.", id="view-image-status")
 
                 with Vertical(id="category-editor"):
                     with Horizontal(classes="editor-toolbar"):
@@ -129,8 +128,6 @@ class DovidnykTab(Vertical):
 
     def set_database(self, conn, cursor) -> None:
         self.conn, self.cursor = conn, cursor
-        self._load_category_meta()
-        self._load_data()
 
     def _load_category_meta(self) -> None:
         try:
@@ -152,7 +149,7 @@ class DovidnykTab(Vertical):
         if self.cursor is None:
             return
         try:
-            # Читаємо тільки наявні поля. Ніяких CREATE TABLE або ALTER TABLE.
+            # Читаємо тільки наявні поля.
             self.cursor.execute("SELECT id, denotation, law, grounds, img, ranking FROM award ORDER BY ranking, denotation")
             rows = self.cursor.fetchall()
             used_ranks = set()
@@ -186,8 +183,12 @@ class DovidnykTab(Vertical):
             self.awards_data = awards
             self._populate_tree()
             self._refresh_award_category_options()
-        except Exception as exc:
-            self.notify(f"Не вдалося завантажити довідник: {exc}", severity="error", timeout=8)
+        except (sqlite3.Error, LookupError, AttributeError, TypeError, ValueError) as exc:
+            self.notify(
+                f"Не вдалося завантажити довідник: {exc}",
+                severity="error",
+                timeout=8,
+            )
 
     def _populate_tree(self) -> None:
         tree = self.query_one("#award-tree", Tree)
@@ -259,7 +260,8 @@ class DovidnykTab(Vertical):
         image_data = award["image"]
         if image_data:
             try:
-                from PIL import Image as PILImage, ImageOps
+                from PIL import Image as PILImage
+                from PIL import ImageOps
                 with PILImage.open(BytesIO(image_data)) as source:
                     source.load()
                     source = source.convert("RGB")
@@ -273,7 +275,7 @@ class DovidnykTab(Vertical):
                     
                 preview.image = display_image 
                 status = "Зображення нагороди"
-            except Exception as exc:
+            except (OSError, ValueError, TypeError) as exc:
                 preview.image = None
                 status = f"Не вдалося показати зображення: {exc}"
         else:
@@ -438,12 +440,16 @@ class DovidnykTab(Vertical):
             self._show_award(award_id)
             self._select_award_node(award_id)
             self.notify(message)
-        except Exception as exc:
+        except sqlite3.Error as exc:
             try:
                 self.conn.rollback()
-            except Exception:
+            except sqlite3.Error:
                 pass
-            self.notify(f"Помилка збереження нагороди: {exc}", severity="error", timeout=8)
+            self.notify(
+                f"Помилка збереження нагороди: {exc}",
+                severity="error",
+                timeout=8,
+            )
 
     def _cancel_editor(self) -> None:
         self._load_data()
@@ -492,6 +498,8 @@ class DovidnykTab(Vertical):
             if self.current_category_id in self.categories:
                 self._show_category(self.current_category_id)
             self.notify("Нагороду видалено.")
-        except Exception as exc:
+        except sqlite3.Error as exc:
             self.conn.rollback()
             self.notify(f"Помилка видалення: {exc}", severity="error")
+
+            

@@ -1,19 +1,26 @@
+# search_tab_textual.py
 from __future__ import annotations
 
-from io import BytesIO
 import platform
 import subprocess
+from io import BytesIO
+from typing import ClassVar
 
-from PIL import Image as PILImage, ImageOps, ImageDraw, ImageFont
-from textual_image.widget import Image as TerminalImage
-from rich.text import Text
-from rich.style import Style
+from PIL import Image as PILImage
+from PIL import ImageDraw, ImageFont, ImageOps
+from sqlcipher3 import dbapi2 as sqlite3
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
+from textual.css.query import NoMatches
 from textual.widgets import Button, Input, TextArea
+from textual_image.widget import Image as TerminalImage
 
-from config import DEF_FUT_LABEL, SHOW_MORE_IMAGES, START_YEAR
-from database_logic_textual import search_q, get_award_image_blobs_for_search, AwardDataLoader
+from config import START_YEAR
+from database_logic_textual import (
+    AwardDataLoader,
+    get_award_image_blobs_for_search,
+    search_q,
+)
 
 
 class SearchTab(Vertical):
@@ -95,8 +102,10 @@ class SearchTab(Vertical):
 
             self.query_one("#search-results", TextArea).text = "\n".join(lines)
 
-        except Exception as exc:
-            self.query_one("#search-results", TextArea).text = f"Помилка завантаження графіка: {exc}"
+        except sqlite3.Error as exc:
+            self.query_one("#search-results", TextArea).text = (
+                f"Помилка завантаження графіка: {exc}"
+            )
 
     async def on_input_submitted(self, event: Input.Submitted) -> None:
         if event.input.id == "person-search":
@@ -113,7 +122,7 @@ class SearchTab(Vertical):
         """Копіювання результатів пошуку до системного буфера обміну."""
         try:
             textarea = self.query_one("#search-results", TextArea)
-        except Exception:
+        except NoMatches:
             return
 
         text_to_copy = textarea.selected_text or textarea.text
@@ -160,11 +169,10 @@ class SearchTab(Vertical):
             self.search_revision += 1
             
             # Виводимо результати пошуку в TextArea
-            self.query_one("#search-results", TextArea).text = result_text or "Нічого не знайдено."
+            self.query_one("#search-results", TextArea).text = result_text or "Нагород та подань не знайдено."
 
             # Завантаження та рендеринг зображень із другого файлу
-            blobs = get_award_image_blobs_for_search(image_ids, counts, self.cursor)
-            blobs_to_show = blobs if SHOW_MORE_IMAGES else blobs
+            blobs_to_show = get_award_image_blobs_for_search(image_ids, counts, self.cursor)
             image_row = self.query_one("#search-images", Vertical)
             
             for index, blob in enumerate(blobs_to_show, start=1):
@@ -209,7 +217,7 @@ class SearchTab(Vertical):
                         draw = ImageDraw.Draw(canvas)
                         try:
                             font = ImageFont.truetype("DejaVuSans.ttf", 9)
-                        except IOError:
+                        except OSError:
                             font = ImageFont.load_default()
                             
                         label_text = f"= {index} ="
@@ -229,11 +237,17 @@ class SearchTab(Vertical):
                                 classes="search-award-image-card",
                             )
                         )
-                except Exception as exc:
-                    self.notify(f"Помилка завантаження зображення: {exc}", severity="warning")
-        
-        except Exception as exc:
-            self.notify(f"Помилка пошуку: {exc}", severity="error", timeout=10)
+                except (OSError, ValueError, TypeError) as exc:
+                    self.notify(
+                        f"Помилка завантаження зображення: {exc}",
+                        severity="warning",
+                    )
+        except sqlite3.Error as exc:
+            self.notify(
+                f"Помилка пошуку: {exc}",
+                severity="error",
+                timeout=10,
+            )
 
     async def clear_search(self) -> None:
         self.query_one("#person-search", Input).value = ""
@@ -261,8 +275,10 @@ class SearchTab(Vertical):
 
     def get_latest_search_results(self):
         return self.latest_search_results, self.source_data_award_and_presentation
-
-    BINDINGS = [
+   
+    BINDINGS: ClassVar[list[tuple[str, str, str]]] = [
         ("f2", "show_award_graph", "Графік"),
         ("f3", "copy_results", "Копіювати"),
     ]
+
+
