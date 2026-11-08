@@ -10,10 +10,11 @@ from textual.containers import Horizontal, Vertical
 from textual.css.query import NoMatches
 from textual.widgets import Button, Checkbox, DataTable, Input, Label, Select, Static
 
-from config import START_YEAR
+from config import ALL_COLUMN_LABELS, START_YEAR
 from database_logic_textual import (
     RankingValues,
     get_formatted_unique_awarded_distinctions,
+    get_service_settings_data,
     get_units_and_ranks,
 )
 from report_export import export_report_csv, export_report_xlsx
@@ -161,7 +162,11 @@ class ZvitTab(Vertical):
         return datetime.now().strftime("%Y-%m-%d")
 
     def _load_reference_data(self):
-        """Загружает категории независимо от состояния таблицы libs."""
+        if not self.cursor:
+            return
+
+        self._load_report_columns_settings()
+
         # Категории берутся из RankingValues — для этого таблица libs не нужна.
         rank_options = [("Усі", "")]
         rank_options.extend(
@@ -411,22 +416,31 @@ class ZvitTab(Vertical):
             return
 
         try:
-            table = self.query_one(DataTable)
+            table = self.query_one("#zvit-table", DataTable)
             table.clear(columns=True)
-            table.add_columns(
-                "ПІБ",
-                "Звання",
-                "Підрозділ",
-                "Нагорода",
-                "Дата нагородження",
-                "Статус вручення",
-                "Подання",
-                "Дата подання",
-            )
+
+            active_columns = self._get_active_report_columns()
+            if not active_columns:
+                self._set_footer("У налаштуваннях звіту не вибрано жодного стовпця.")
+                return
+
+            table.add_columns(*(ALL_COLUMN_LABELS[index] for index in active_columns))
 
             rows = self._fetch_rows()
             for row in rows:
-                table.add_row(*[str(value) if value is not None else "" for value in row])
+                values = []
+                for index in active_columns:
+                    value = row[index] if index < len(row) else None
+
+                    if index == 14:
+                        # В базе m.dead обычно хранится как 1 или NULL.
+                        value = "Так" if value not in (None, "", 0, "0") else ""
+                    elif value is None:
+                        value = ""
+
+                    values.append(str(value))
+
+                table.add_row(*values)
 
             self._set_footer(f"Знайдено записів: {len(rows)}")
         except NoMatches as exc:
@@ -445,53 +459,53 @@ class ZvitTab(Vertical):
         has_submission_status_filter = status != str(SUBMISSION_STATUS_ALL)
 
         if has_submission_status_filter:
+            report_fields = """
+                SELECT
+                    p.name,                                      -- 0 ПІБ
+                    p.rank,                                      -- 1 Звання
+                    p.unit,                                      -- 2 Підрозділ
+                    pr.registration,                             -- 3 Подання №
+                    pr.date_registration,                        -- 4 Дата подання
+                    pr.text_presentation,                        -- 5 Текст подання
+                    pr.report,                                   -- 6 Рух
+                    m.decree,                                    -- 7 Рішення
+                    m.date_decree,                               -- 8 Дата рішення
+                    a.denotation,                                -- 9 Нагорода
+                    m.date_handover,                             -- 10 Дата вручення
+                    CASE
+                        WHEN p2.name IS NOT NULL THEN p2.name
+                        ELSE m.handover
+                    END,                                         -- 11 Хто отримав
+                    m.consignment_note,                          -- 12 Накладна
+                    m.number_meed,                               -- 13 Номер нагороди
+                    m.dead,                                      -- 14 Посмертно
+                    p.inn,                                       -- 15 РНОКПП
+                    p.date_birth                                 -- 16 Дата народження
+            """
+
             # При выборе статуса начинаем с presentation:
             # иначе подання без связанной награды не попадут в результаты.
-            query = """
-                SELECT
-                    p.name,
-                    p.rank,
-                    p.unit,
-                    a.denotation,
-                    m.date_decree,
-                    CASE
-                        WHEN m.id IS NULL THEN ''
-                        WHEN m.handover IS NULL OR TRIM(m.handover) = ''
-                            THEN 'залишок в натурі'
-                        ELSE 'видано'
-                    END,
-                    pr.registration,
-                    pr.date_registration
-                FROM presentation pr
-                LEFT JOIN personality p ON p.id = pr.id_personality
-                LEFT JOIN meed m
-                    ON CAST(pr.id_meed AS INTEGER) > 0
-                   AND m.id = CAST(pr.id_meed AS INTEGER)
-                LEFT JOIN award a ON a.id = m.id_award
-                WHERE 1=1
-            """
-        else:
-            # Для режима «Усі подання» сохраняем прежний список награждений.
-            query = """
-                SELECT
-                    p.name,
-                    p.rank,
-                    p.unit,
-                    a.denotation,
-                    m.date_decree,
-                    CASE
-                        WHEN m.handover IS NULL OR TRIM(m.handover) = ''
-                            THEN 'залишок в натурі'
-                        ELSE 'видано'
-                    END,
-                    pr.registration,
-                    pr.date_registration
-                FROM meed m
-                LEFT JOIN personality p ON p.id = m.id_personality
-                LEFT JOIN award a ON a.id = m.id_award
-                LEFT JOIN presentation pr ON pr.id_meed = m.id
-                WHERE 1=1
-            """
+            if has_submission_status_filter:
+                query = report_fields + """
+                    FROM presentation pr
+                    LEFT JOIN personality p ON p.id = pr.id_personality
+                    LEFT JOIN meed m
+                        ON CAST(pr.id_meed AS INTEGER) > 0
+                       AND m.id = CAST(pr.id_meed AS INTEGER)
+                    LEFT JOIN award a ON a.id = m.id_award
+                    LEFT JOIN personality p2 ON p2.id = m.handover
+                    WHERE 1=1
+                """
+            else:
+                query = report_fields + """
+                    FROM meed m
+                    LEFT JOIN personality p ON p.id = m.id_personality
+                    LEFT JOIN award a ON a.id = m.id_award
+                    LEFT JOIN presentation pr ON pr.id_meed = m.id
+                    LEFT JOIN personality p2 ON p2.id = m.handover
+                    WHERE 1=1
+                """
+
         params: list[Any] = []
 
         if not filters["all_time"]:
@@ -648,6 +662,48 @@ class ZvitTab(Vertical):
 
         from setuptab_textual import ReportSettingsModal
         self.app.push_screen(ReportSettingsModal(self.conn, self))
+
+    def _load_report_columns_settings(self) -> None:
+        """Загружает сохранённые настройки видимых колонок из service_.zvit_fields."""
+        default_flags = [1] * 14 + [3]  # 14 основных + РНОКПП и дата рождения
+        self.report_column_flags = default_flags
+
+        if not self.cursor:
+            return
+
+        try:
+            settings_row = get_service_settings_data(self.cursor)
+            if not settings_row or len(settings_row) <= 5 or not settings_row[5]:
+                return
+
+            flags = [int(value) for value in str(settings_row[5]).split(",")]
+            flags = (flags + [0] * 15)[:15]
+            self.report_column_flags = flags
+
+        except (ValueError, TypeError, sqlite3.Error) as exc:
+            self._set_footer(f"Помилка налаштувань колонок звіту: {exc}")
+
+    def _get_active_report_columns(self) -> list[int]:
+        """Преобразует настройки чекбоксов в индексы полей результата SQL."""
+        flags = getattr(self, "report_column_flags", [1] * 14 + [3])
+
+        # Флаги 0–13 соответствуют первым четырнадцати полям ALL_COLUMN_LABELS.
+        columns = [index for index in range(14) if flags[index] == 1]
+
+        # Пятнадцатый флаг кодирует выбор РНОКПП и даты рождения:
+        # 1 — РНОКПП, 2 — дата рождения, 3 — оба поля.
+        last_flag = flags[14]
+        if last_flag in (1, 3):
+            columns.append(15)
+        if last_flag in (2, 3):
+            columns.append(16)
+
+        return columns
+
+    def refresh_tree(self) -> None:
+        """Перечитывает настройки после их сохранения в окне настроек."""
+        self._load_report_columns_settings()
+        self.refresh_report()
 
     def _export_report(self, file_format: str) -> None:
         """Экспортирует текущее содержимое таблицы отчёта."""
