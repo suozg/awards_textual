@@ -18,6 +18,7 @@ from database_logic_textual import (
     get_units_and_ranks,
 )
 from report_export import export_report_csv, export_report_xlsx
+from csv_person_filter import CsvPersonFilter
 
 PERSON_CATEGORY_ALL = 6
 AWARD_HANDOVER_STATUS_REMAINING = 1
@@ -97,6 +98,7 @@ class ZvitTab(Vertical):
             value=SUBMISSION_STATUS_ALL,
             id="zvit-submission-status",
         )
+        self.csv_filter = CsvPersonFilter()
 
     def set_database(self, conn, cursor):
         self.conn = conn
@@ -144,6 +146,14 @@ class ZvitTab(Vertical):
                 yield Button("Сформувати", variant="primary", id="zvit-refresh")
                 yield Button("CSV", id="zvit-export-csv")
                 yield Button("XLSX", id="zvit-export-xlsx")
+
+            with Horizontal(id="zvit-csv-row"):
+                yield Input(
+                    placeholder="Введіть шлях до CSV та натисніть Enter",
+                    id="zvit-csv-path",
+                )
+                yield Button("Очистити CSV", id="zvit-clear-csv")
+                yield Static("CSV не вибрано", id="zvit-csv-status")
 
             yield DataTable(id="zvit-table", zebra_stripes=True)
             yield Static("Для створення звіту оберіть параметри та натисніть кнопку Оновити", id="zvit-footer")
@@ -408,6 +418,7 @@ class ZvitTab(Vertical):
             "submission_status": self.submission_status.value,
             "start_date": self.start_date.value,
             "end_date": self.end_date.value,
+            "csv_inns": self.csv_filter.inn_values if self.csv_filter.enabled else [],
         }
 
     def refresh_report(self):
@@ -435,6 +446,10 @@ class ZvitTab(Vertical):
                     if index == 14:
                         # В базе m.dead обычно хранится как 1 или NULL.
                         value = "Так" if value not in (None, "", 0, "0") else ""
+                    elif index == 15 and value is not None:
+                        inn = str(value).strip()
+                        if inn.endswith(".0") and inn[:-2].isdigit():
+                            value = inn[:-2]
                     elif value is None:
                         value = ""
 
@@ -458,53 +473,52 @@ class ZvitTab(Vertical):
         status = str(status)
         has_submission_status_filter = status != str(SUBMISSION_STATUS_ALL)
 
-        if has_submission_status_filter:
-            report_fields = """
-                SELECT
-                    p.name,                                      -- 0 ПІБ
-                    p.rank,                                      -- 1 Звання
-                    p.unit,                                      -- 2 Підрозділ
-                    pr.registration,                             -- 3 Подання №
-                    pr.date_registration,                        -- 4 Дата подання
-                    pr.text_presentation,                        -- 5 Текст подання
-                    pr.report,                                   -- 6 Рух
-                    m.decree,                                    -- 7 Рішення
-                    m.date_decree,                               -- 8 Дата рішення
-                    a.denotation,                                -- 9 Нагорода
-                    m.date_handover,                             -- 10 Дата вручення
-                    CASE
-                        WHEN p2.name IS NOT NULL THEN p2.name
-                        ELSE m.handover
-                    END,                                         -- 11 Хто отримав
-                    m.consignment_note,                          -- 12 Накладна
-                    m.number_meed,                               -- 13 Номер нагороди
-                    m.dead,                                      -- 14 Посмертно
-                    p.inn,                                       -- 15 РНОКПП
-                    p.date_birth                                 -- 16 Дата народження
-            """
+        report_fields = """
+            SELECT
+                p.name,                                      -- 0 ПІБ
+                p.rank,                                      -- 1 Звання
+                p.unit,                                      -- 2 Підрозділ
+                pr.registration,                             -- 3 Подання №
+                pr.date_registration,                        -- 4 Дата подання
+                pr.text_presentation,                        -- 5 Текст подання
+                pr.report,                                   -- 6 Рух
+                m.decree,                                    -- 7 Рішення
+                m.date_decree,                               -- 8 Дата рішення
+                a.denotation,                                -- 9 Нагорода
+                m.date_handover,                             -- 10 Дата вручення
+                CASE
+                    WHEN p2.name IS NOT NULL THEN p2.name
+                    ELSE m.handover
+                END,                                         -- 11 Хто отримав
+                m.consignment_note,                          -- 12 Накладна
+                m.number_meed,                               -- 13 Номер нагороди
+                m.dead,                                      -- 14 Посмертно
+                p.inn,                                       -- 15 РНОКПП
+                p.date_birth                                 -- 16 Дата народження
+        """
 
-            # При выборе статуса начинаем с presentation:
-            # иначе подання без связанной награды не попадут в результаты.
-            if has_submission_status_filter:
-                query = report_fields + """
-                    FROM presentation pr
-                    LEFT JOIN personality p ON p.id = pr.id_personality
-                    LEFT JOIN meed m
-                        ON CAST(pr.id_meed AS INTEGER) > 0
-                       AND m.id = CAST(pr.id_meed AS INTEGER)
-                    LEFT JOIN award a ON a.id = m.id_award
-                    LEFT JOIN personality p2 ON p2.id = m.handover
-                    WHERE 1=1
-                """
-            else:
-                query = report_fields + """
-                    FROM meed m
-                    LEFT JOIN personality p ON p.id = m.id_personality
-                    LEFT JOIN award a ON a.id = m.id_award
-                    LEFT JOIN presentation pr ON pr.id_meed = m.id
-                    LEFT JOIN personality p2 ON p2.id = m.handover
-                    WHERE 1=1
-                """
+        # При выборе статуса начинаем с presentation:
+        # иначе подання без связанной награды не попадут в результаты.
+        if has_submission_status_filter:
+            query = report_fields + """
+                FROM presentation pr
+                LEFT JOIN personality p ON p.id = pr.id_personality
+                LEFT JOIN meed m
+                    ON CAST(pr.id_meed AS INTEGER) > 0
+                   AND m.id = CAST(pr.id_meed AS INTEGER)
+                LEFT JOIN award a ON a.id = m.id_award
+                LEFT JOIN personality p2 ON p2.id = m.handover
+                WHERE 1=1
+            """
+        else:
+            query = report_fields + """
+                FROM meed m
+                LEFT JOIN personality p ON p.id = m.id_personality
+                LEFT JOIN award a ON a.id = m.id_award
+                LEFT JOIN presentation pr ON pr.id_meed = m.id
+                LEFT JOIN personality p2 ON p2.id = m.handover
+                WHERE 1=1
+            """
 
         params: list[Any] = []
 
@@ -600,6 +614,12 @@ class ZvitTab(Vertical):
                     " AND pr.registration IS NOT NULL"
                     " AND TRIM(pr.registration) != ''"
                 )
+
+        csv_inns = filters.get("csv_inns") or []
+        if csv_inns:
+            placeholders = ",".join("?" for _ in csv_inns)
+            query += f" AND TRIM(CAST(p.inn AS TEXT)) IN ({placeholders})"
+            params.extend(csv_inns)
             
         query += " ORDER BY m.date_decree DESC, p.name COLLATE NOCASE"
 
@@ -613,6 +633,10 @@ class ZvitTab(Vertical):
     def _set_footer(self, message: str):
         self.query_one("#zvit-footer", Static).update(message)
 
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        if event.input.id == "zvit-csv-path":
+            self._load_csv_filter_from_input()
+            
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "zvit-refresh":
             self.refresh_report()
@@ -620,7 +644,12 @@ class ZvitTab(Vertical):
             self._export_report("csv")
         elif event.button.id == "zvit-export-xlsx":
             self._export_report("xlsx")
-
+        elif event.button.id == "zvit-clear-csv":
+            self.csv_filter.clear()
+            self.query_one("#zvit-csv-path", Input).value = ""
+            self.query_one("#zvit-csv-status", Static).update("CSV не вибрано")
+            self.refresh_report()
+            
     def on_checkbox_changed(self, event) -> None:
         if event.checkbox.id in {
             "zvit-all-time",
@@ -740,6 +769,28 @@ class ZvitTab(Vertical):
 
         except (OSError, RuntimeError, ValueError) as exc:
             self.notify(f"Ошибка экспорта: {exc}", severity="error", timeout=10)
+
+    def _load_csv_filter_from_input(self) -> None:
+        path = self.query_one("#zvit-csv-path", Input).value.strip()
+        if not path:
+            self.notify("Введіть шлях до CSV-файла.", severity="warning")
+            return
+
+        try:
+            values = self.csv_filter.load(path)
+            if not values:
+                self.query_one("#zvit-csv-status", Static).update("У CSV не знайдено РНОКПП")
+                self.notify("У CSV-файлі не знайдено РНОКПП.", severity="warning")
+                return
+
+            self.query_one("#zvit-csv-status", Static).update(
+                f"CSV активний: {len(values)} записів"
+            )
+            self.notify(f"CSV завантажено: {len(values)} РНОКПП", severity="information")
+            self.refresh_report()
+        except Exception as exc:
+            self.query_one("#zvit-csv-status", Static).update("Помилка читання CSV")
+            self.notify(f"Помилка CSV: {exc}", severity="error")
 
     BINDINGS: ClassVar[list[tuple[str, str, str]]] = [
         ("f4", "open_report_settings", "Налаштування звітів"),

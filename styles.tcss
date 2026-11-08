@@ -806,6 +806,7 @@ ZvitTab {
 #zvit-middle-row,
 #zvit-award-row,
 #zvit-awards-issue-row,
+#zvit-csv-row,
 #zvit-extra-row {
     height: auto;
     width: 1fr;
@@ -822,6 +823,17 @@ ZvitTab {
 #zvit-extra-row Select {
     width: 1fr;
     margin-right: 1;
+}
+
+#zvit-csv-row Input {
+    width: 1fr;
+    margin-right: 1;
+}
+
+#zvit-csv-status {
+    width: auto;
+    color: $text-muted;
+    padding: 0 1;
 }
 
 .zvit-label {
