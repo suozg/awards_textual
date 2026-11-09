@@ -749,4 +749,22 @@ class KartkaTab(VerticalScroll):
             self.conn.rollback()
             self.notify(f"Помилка збереження: {exc}", severity="error")
 
-            
+           
+    def delete_person_with_related_records(self, person_id: int) -> None:
+        try:
+            self.cursor.execute(
+                "DELETE FROM presentation WHERE id_personality = ?",
+                (person_id,),
+            )
+            self.cursor.execute(
+                "DELETE FROM meed WHERE id_personality = ?",
+                (person_id,),
+            )
+            self.cursor.execute(
+                "DELETE FROM personality WHERE id = ?",
+                (person_id,),
+            )
+            self.conn.commit()
+        except sqlite3.Error:
+            self.conn.rollback()
+            raise

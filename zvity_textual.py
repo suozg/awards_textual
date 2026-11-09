@@ -543,8 +543,13 @@ class ZvitTab(Vertical):
         if filters["posthumous"]:
             query += " AND m.dead = 1"
 
-        if filters["issue_protocols"]:
-            query += " AND (m.handover IS NULL OR TRIM(m.handover) = '')"
+        if filters["issue_protocols"]: 
+            # нужно учесть ранги наград (протоколи для державні та відомчі)
+            query += """
+                AND m.handover IS NOT NULL
+                AND TRIM(m.handover) != ''
+                AND SUBSTR(m.handover, -1, 1) != '$'
+            """
 
         if filters["consignment_note"] not in (None, ""):
             query += " AND m.consignment_note = ?"
@@ -622,6 +627,26 @@ class ZvitTab(Vertical):
             params.extend(csv_inns)
             
         query += " ORDER BY m.date_decree DESC, p.name COLLATE NOCASE"
+
+        if not has_submission_status_filter:
+            handover_status = filters["handover_status"]
+
+            if handover_status == AWARD_HANDOVER_STATUS_REMAINING:
+                query += """
+                    AND m.consignment_note IS NOT NULL
+                    AND TRIM(m.consignment_note) != ''
+                    AND (m.handover IS NULL OR TRIM(m.handover) = '')
+                """
+            elif handover_status == AWARD_HANDOVER_STATUS_ISSUED:
+                query += """
+                    AND m.consignment_note IS NOT NULL
+                    AND TRIM(m.consignment_note) != ''
+                    AND m.handover IS NOT NULL
+                    AND TRIM(m.handover) != ''
+                """
+            elif handover_status == AWARD_HANDOVER_STATUS_ASSIGNED:
+                # Сверить точное определение «призначені» с текущей бизнес-логикой awardswx.
+                pass
 
         try:
             self.cursor.execute(query, params)
