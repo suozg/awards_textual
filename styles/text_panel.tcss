@@ -1,0 +1,32 @@
+/* ========================================================================= */
+/* ВКЛАДКА ТЕКСТ И ПОИСК ПО ТЕКСТУ */
+/* ========================================================================= */
+
+TextPanel {
+    height: 1fr;
+}
+
+#text-search-row {
+    height: auto;
+}
+
+#text-search-query {
+    width: 1fr;
+}
+
+#text-results-row {
+    height: 1fr;
+    margin: 1 0 0 0;
+}
+
+#text-presentation-list {
+    width: 22;
+    min-width: 14;
+    height: 1fr;
+}
+
+#text-presentation-body {
+    width: 1fr;
+    height: 1fr;
+    border: round $panel;
+}

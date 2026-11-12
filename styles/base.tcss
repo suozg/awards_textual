@@ -1,0 +1,62 @@
+/* ========================================================================= */
+/* БАЗОВЫЕ СТИЛИ И ОБЩИЙ LAYOUT */
+/* ========================================================================= */
+
+Screen {
+    layout: vertical;
+}
+
+TabbedContent {
+    height: 1fr;
+    width: 1fr;
+}
+
+TabPane {
+    padding: 1;
+    height: 1fr;
+    width: 1fr;
+}
+
+.row {
+    height: auto;
+}
+
+.wide {
+    width: 1fr;
+}
+
+Footer {
+    dock: bottom;
+    height: auto;
+}
+
+#status {
+    height: 1;
+    dock: bottom;
+    padding: 0 1;
+    background: $panel;
+}
+
+.help {
+    color: $text-muted;
+}
+
+Checkbox {
+    color: $text-muted;
+    background: transparent;
+    margin-right: 2;
+}
+
+Checkbox.-on {
+    color: $primary;
+    text-style: bold;
+}
+
+Checkbox > .checkbox--label {
+    color: $foreground;
+}
+
+Checkbox.-on > .checkbox--label {
+    color: $primary;
+    text-style: bold;
+}

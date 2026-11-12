@@ -1,0 +1,76 @@
+/* ========================================================================= */
+/* ВКЛАДКА «ЗВІТИ» */
+/* ========================================================================= */
+
+ZvitTab {
+    height: 1fr;
+    width: 1fr;
+    padding: 1;
+}
+
+#zvit-root {
+    height: 1fr;
+    width: 1fr;
+}
+
+#zvit-top-row,
+#zvit-middle-row,
+#zvit-award-row,
+#zvit-awards-issue-row,
+#zvit-csv-row,
+#zvit-extra-row {
+    height: auto;
+    width: 1fr;
+    align: left middle;
+    margin-bottom: 1;
+}
+
+#zvit-top-row Input,
+#zvit-middle-row Input,
+#zvit-award-row Input,
+#zvit-extra-row Input,
+#zvit-middle-row Select,
+#zvit-award-row Select,
+#zvit-extra-row Select {
+    width: 1fr;
+    margin-right: 1;
+}
+
+#zvit-csv-row Input {
+    width: 1fr;
+    margin-right: 1;
+}
+
+#zvit-csv-status {
+    width: auto;
+    color: $text-muted;
+    padding: 0 1;
+}
+
+.zvit-label {
+    width: auto;
+    margin-right: 1;
+    color: $text-muted;
+}
+
+.zvit-range-separator {
+    width: auto;
+    min-width: 2;
+    content-align: center middle;
+    color: $text-muted;
+}
+
+#zvit-table {
+    height: 1fr;
+    min-height: 12;
+    border: round $panel;
+    margin-top: 1;
+}
+
+#zvit-footer {
+    height: auto;
+    margin-top: 1;
+    padding: 0 1;
+    background: $boost;
+    color: $text-muted;
+}

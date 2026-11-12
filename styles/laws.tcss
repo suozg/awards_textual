@@ -1,0 +1,72 @@
+/* ========================================================================= */
+/* ВКЛАДКА «ЗАКОНИ» И МОДАЛЬНОЕ ОКНО РЕДАКТИРОВАНИЯ */
+/* ========================================================================= */
+
+.laws-container {
+    padding: 1 2;
+    height: 100%;
+}
+
+.laws-container .section-title {
+    text-style: bold;
+    color: $text-muted;
+    margin-bottom: 1;
+}
+
+#laws-table {
+    height: 1fr;
+    border: solid $panel;
+    margin-bottom: 1;
+}
+
+.laws-buttons {
+    height: auto;
+    align: right middle;
+}
+
+.laws-buttons Button {
+    margin-left: 1;
+}
+
+LawEditScreen {
+    align: center middle;
+}
+
+#law-edit-box {
+    width: 60;
+    height: auto;
+    background: $surface;
+    border: thick $primary;
+    padding: 1 2;
+}
+
+#law-edit-title {
+    text-style: bold;
+    text-align: center;
+    margin-bottom: 1;
+    color: $primary;
+}
+
+#law-edit-box Label {
+    margin-top: 1;
+    color: $text-muted;
+}
+
+#law-edit-box Input {
+    margin-top: 0;
+}
+
+#law-edit-error {
+    color: $error;
+    margin-top: 1;
+}
+
+#law-edit-box Horizontal {
+    margin-top: 2;
+    align: right middle;
+    height: auto;
+}
+
+#law-edit-box Horizontal Button {
+    margin-left: 1;
+}

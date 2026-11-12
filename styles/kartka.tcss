@@ -1,0 +1,218 @@
+/* ========================================================================= */
+/* СТИЛИ ВКЛАДКИ «КАРТКА» */
+/* ========================================================================= */
+
+KartkaTab {
+    padding: 0;
+    overflow-y: auto;
+}
+
+KartkaTab .box {
+    height: auto;
+    border: round $panel;
+    padding: 0 0;
+    margin-bottom: 0;
+    background: $surface;
+}
+
+KartkaTab .legend {
+    color: $primary;
+    text-style: bold;
+    margin-bottom: 0;
+}
+
+KartkaTab .row {
+    height: auto;
+    margin-bottom: 0;
+    align: left middle;
+}
+
+KartkaTab .row Label {
+    width: 16;
+    content-align: right middle;
+    padding-right: 1;
+}
+
+KartkaTab .row Input,
+KartkaTab .row Select {
+    width: 1fr;
+    margin-right: 1;
+}
+
+KartkaTab #person-select {
+    width: 1fr;
+}
+
+KartkaTab #person-count {
+    width: 6;
+    text-align: center;
+}
+
+KartkaTab #full-name {
+    width: 2fr;
+}
+
+KartkaTab #inn,
+KartkaTab #rank-select,
+KartkaTab #unit-select {
+    width: 1fr;
+}
+
+KartkaTab #birth-date-label {
+    width: auto;
+    padding: 0 1;
+    color: $text-muted;
+}
+
+.screen-panel {
+    height: auto;
+    border: solid $boost;
+    padding: 0 1;
+    margin-bottom: 0;
+}
+
+KartkaTab #pres-count,
+KartkaTab #meed-count {
+    width: 6;
+    text-align: center;
+    content-align: center middle;
+}
+
+KartkaTab TextArea#pres-text {
+    width: 100%;
+    height: 5;
+    background: $background;
+    margin-bottom: 1;
+}
+
+#pres-checkboxes-row {
+    height: auto;
+    width: 100%;
+    align: left middle;
+}
+
+#pres-checkboxes-row Checkbox {
+    margin-right: 2;
+    width: auto;
+}
+
+#pres-checkboxes-row #goto-meed-btn {
+    width: auto;
+    height: 3;
+    min-width: 15;
+    margin-left: 2;
+}
+
+#card-screen-switch {
+    height: auto;
+    margin-top: 0;
+    margin-bottom: 0;
+}
+
+#card-screen-switch Button {
+    width: 1fr;
+    margin: 0;
+}
+
+#card-actions-row {
+    height: auto;
+    margin-top: 1;
+    margin-bottom: 0;
+    align: left middle;
+}
+
+KartkaTab #delete-select {
+    width: 1fr;
+    margin-right: 1;
+}
+
+KartkaTab #save-btn,
+KartkaTab #clear-btn {
+    width: 18;
+    margin-left: 1;
+}
+
+#meed-content-row {
+    height: auto;
+    width: 100%;
+    align: left top;
+}
+
+#meed-fields-col {
+    width: 1fr;
+    height: auto;
+}
+
+#meed-image-col {
+    width: 16;
+    height: 11;
+    align: center middle;
+    content-align: center middle;
+    padding: 0;
+}
+
+#award-image {
+    width: 100%;
+    height: 100%;
+    content-align: center middle;
+}
+
+ModalScreen {
+    align: center middle;
+}
+
+#link-box {
+    width: 60%;
+    height: auto;
+    background: $surface;
+    border: thick $primary;
+    padding: 1 2;
+}
+
+ConfirmDeleteModal,
+ConfirmDeletePresentationModal,
+ConfirmDeleteMeedModal,
+LinkDialogModal {
+    align: center middle;
+}
+
+#link-title {
+    text-style: bold;
+    color: $text;
+    align: center middle;
+    margin-bottom: 1;
+}
+
+#link-label {
+    color: $text-muted;
+    margin-bottom: 2;
+    text-align: center;
+}
+
+#link-box Horizontal {
+    align: center middle;
+    height: auto;
+    dock: bottom;
+}
+
+#link-box Button {
+    margin: 0 1;
+}
+
+Button.error {
+    background: $error;
+    color: $text;
+}
+
+Button.error:hover {
+    background: $error-darken-1;
+}
+
+Button.warning {
+    background: $warning;
+    color: $text;
+}
+
+Button.warning:hover {
+    background: $warning-darken-1;
+}

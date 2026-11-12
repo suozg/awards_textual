@@ -1,0 +1,107 @@
+/* ========================================================================= */
+/* ЭКРАНЫ И ОБЩИЕ КОМПОНЕНТЫ */
+/* ========================================================================= */
+
+SplashScreen {
+    align: center middle;
+    background: $background;
+}
+
+.splash-container {
+    width: 70;
+    height: 17;
+    padding: 2 4;
+    border: round $primary;
+    background: $surface;
+    align: center middle;
+}
+
+.splash-title {
+    width: 100%;
+    height: 3;
+    content-align: center middle;
+    text-style: bold;
+    color: $primary;
+}
+
+.splash-author {
+    width: 100%;
+    height: 2;
+    content-align: center middle;
+    color: $secondary;
+}
+
+.splash-status {
+    width: 100%;
+    height: 3;
+    margin-top: 2;
+    padding: 1;
+    content-align: center middle;
+    color: $text-muted;
+    border-top: solid $panel;
+}
+
+LoginScreen {
+    align: center middle;
+}
+
+#login-box {
+    width: auto;
+    height: auto;
+    padding: 1 2;
+    border: round $accent;
+    background: $surface;
+}
+
+#login-title {
+    margin: 1;
+    color: $accent;
+}
+
+#db-path {
+    margin: 1;
+}
+
+#password {
+    margin: 1;
+}
+
+#login-error {
+    color: $error;
+    height: auto;
+}
+
+AwardGraphScreen {
+    align: center middle;
+}
+
+#graph-box {
+    width: 85%;
+    height: 90%;
+    background: $surface;
+    border: thick $primary;
+    padding: 1 2;
+}
+
+#graph-scroll-container {
+    height: 1fr;
+    border: solid $panel;
+    background: $boost;
+    overflow-y: auto;
+}
+
+#graph-chart {
+    width: 100%;
+}
+
+#graph-controls {
+    height: auto;
+    dock: bottom;
+    margin-top: 1;
+    align: center middle;
+}
+
+#graph-status {
+    margin-top: 1;
+    text-align: center;
+}

@@ -1,0 +1,136 @@
+/* ========================================================================= */
+/* ВКЛАДКА «ДОВІДНИК» */
+/* ========================================================================= */
+
+ConfirmDeleteScreen {
+    align: center middle;
+}
+
+#confirm-box {
+    width: 68;
+    height: auto;
+    padding: 1 2;
+    border: round $error;
+    background: $surface;
+}
+
+#confirm-message {
+    margin-bottom: 1;
+}
+
+DovidnykTab {
+    height: 1fr;
+    width: 1fr;
+}
+
+#dovidnyk-layout {
+    height: 1fr;
+    width: 1fr;
+}
+
+#award-tree {
+    width: 28%;
+    min-width: 22;
+    height: 1fr;
+    border: round $panel;
+    overflow-x: auto;
+}
+
+#award-details {
+    width: 1fr;
+    height: 1fr;
+    padding: 0 1;
+}
+
+#empty-panel, #category-view, #award-view, #category-editor, #award-editor {
+    height: 1fr;
+}
+
+#award-view-layout {
+    height: 1fr;
+    width: 1fr;
+}
+
+#award-view-text {
+    width: 1fr;
+    height: 1fr;
+    padding-right: 1;
+    layout: vertical;
+}
+
+#award-view-text .actions {
+    dock: bottom;
+    margin-top: 0;
+}
+
+#award-view-image-column {
+    width: 34%;
+    min-width: 24;
+    max-width: 44;
+    height: 1fr;
+    padding: 1;
+    border: round $panel;
+    align: left middle;
+}
+
+#view-image-preview {
+    height: 1fr;
+    width: 100%;
+    min-height: 12;
+    padding: 0;
+    content-align: left middle;
+}
+
+#view-law {
+    height: 5;
+    min-height: 3;
+    margin-bottom: 1;
+}
+
+#view-grounds {
+    height: 1fr;
+    min-height: 6;
+}
+
+#category-view-description, #category-editor-description {
+    height: 1fr;
+    min-height: 5;
+}
+
+#award-editor-grounds {
+    height: 1fr;
+    min-height: 5;
+}
+
+#award-editor-law {
+    height: 4;
+}
+
+#category-editor-name, #award-editor-name, #award-editor-category, #award-editor-image-path {
+    margin-bottom: 1;
+}
+
+.field-label {
+    margin-top: 1;
+}
+
+.actions {
+    height: auto;
+    margin-top: 1;
+}
+
+#image-status, #view-image-status {
+    height: auto;
+    color: $text-muted;
+    margin-top: 1;
+}
+
+.editor-toolbar {
+    height: auto;
+    margin-bottom: 1;
+}
+
+.editor-title {
+    width: 1fr;
+    content-align: left middle;
+}

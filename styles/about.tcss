@@ -1,0 +1,65 @@
+/* ========================================================================= */
+/* ВКЛАДКА «ПРО» */
+/* ========================================================================= */
+
+.about-container {
+    padding: 1 2;
+    height: 100%;
+}
+
+.about-info-pane {
+    width: 45%;
+    height: 100%;
+    background: $surface;
+    border: solid $panel;
+    padding: 2;
+    margin-right: 2;
+}
+
+.about-header {
+    text-style: bold;
+    color: $primary;
+    text-align: center;
+    margin-bottom: 2;
+}
+
+.about-text {
+    color: $foreground;
+}
+
+.about-game-pane {
+    width: 55%;
+    height: 100%;
+    background: $surface;
+    border: solid $panel;
+    padding: 1 2;
+}
+
+.checkers-title {
+    text-style: bold;
+    color: $warning;
+    text-align: center;
+    margin-bottom: 1;
+}
+
+#checkers-board-view {
+    text-align: center;
+    margin-bottom: 1;
+}
+
+#checkers-log {
+    height: 1fr;
+    border: solid $boost;
+    background: $background;
+    margin-bottom: 1;
+}
+
+.checkers-buttons {
+    margin: 1 0 0 0;
+    height: auto;
+    align: center middle;
+}
+
+.checkers-buttons Button {
+    margin-right: 1;
+}

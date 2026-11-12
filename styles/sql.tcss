@@ -1,0 +1,38 @@
+/* ========================================================================= */
+/* SQL-ВКЛАДКА */
+/* ========================================================================= */
+
+#tab-sql Vertical {
+    padding: 1 2;
+    height: 100%;
+}
+
+#tab-sql Label {
+    margin-bottom: 1;
+    color: $text-muted;
+}
+
+#sql-input {
+    height: 10;
+    margin-bottom: 1;
+    border: solid $panel;
+}
+
+#sql-input:focus {
+    border: solid $primary;
+}
+
+#tab-sql Horizontal {
+    height: auto;
+    margin-bottom: 1;
+    align: left middle;
+}
+
+#tab-sql Horizontal Button {
+    margin-right: 1;
+}
+
+#sql-result {
+    height: 1fr;
+    border: solid $panel;
+}
