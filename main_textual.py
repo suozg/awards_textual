@@ -168,7 +168,19 @@ class MainScreen(Screen):
 
 
 class AwardsTextualApp(App):
-    CSS_PATH = "styles.tcss" 
+    CSS_PATH = [
+        "styles/base.tcss",
+        "styles/screens.tcss",
+        "styles/search.tcss",
+        "styles/kartka.tcss",
+        "styles/dovidnyk.tcss",
+        "styles/text_panel.tcss",
+        "styles/sql.tcss",
+        "styles/laws.tcss",
+        "styles/about.tcss",
+        "styles/reports.tcss",
+        "styles/settings.tcss",
+    ]    
     TITLE = TITLE_PROG
     SUB_TITLE = f"Textual port · {VERSION}"
     BINDINGS: ClassVar[list[tuple[str, str, str]]] = [
