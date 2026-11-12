@@ -416,8 +416,6 @@ KartkaTab #clear-btn {
 }
 
 
-
-
 ModalScreen {
     align: center middle; /* Выравнивание модалки по центру экрана */
 }
@@ -428,6 +426,68 @@ ModalScreen {
     border: heavy $accent; /* Рамка (цвет по вкусу) */
     background: $surface;  /* Цвет фона модального окна */
     padding: 1 2;          /* Внутренние отступы */
+}
+
+
+ConfirmDeleteModal,
+ConfirmDeletePresentationModal,
+ConfirmDeleteMeedModal,
+LinkDialogModal {
+    align: center middle;
+}
+
+#link-box {
+    width: 60%;
+    height: auto;
+    background: $surface;
+    border: thick $primary;
+    padding: 1 2;
+}
+
+/* Заголовок модального окна */
+#link-title {
+    text-style: bold;
+    color: $text;
+    align: center middle;
+    margin-bottom: 1;
+}
+
+/* Текст сообщения */
+#link-label {
+    color: $text-muted;
+    margin-bottom: 2;
+    text-align: center;
+}
+
+/* Кнопки внутри модального окна */
+#link-box Horizontal {
+    align: center middle;
+    height: auto;
+    dock: bottom;
+}
+
+#link-box Button {
+    margin: 0 1;
+}
+
+/* Стили для кнопок опасных действий (удаления) */
+Button.error {
+    background: $error;
+    color: $text;
+}
+
+Button.error:hover {
+    background: $error-darken-1;
+}
+
+/* Стили для кнопок предупреждений */
+Button.warning {
+    background: $warning;
+    color: $text;
+}
+
+Button.warning:hover {
+    background: $warning-darken-1;
 }
 
 

@@ -19,6 +19,160 @@ except ImportError:
 from database_logic_textual import get_treedata, get_units_and_ranks, is_valid_INN
 
 
+class ConfirmDeletePresentationModal(ModalScreen[str]):
+    """Модальне вікно для видалення подання зі зв'язаною нагородою."""
+
+    def __init__(self, cursor, presentation_id):
+        super().__init__()
+        self.cursor = cursor
+        self.presentation_id = presentation_id
+        self.has_meed = False
+        self.check_linked_meed()
+
+    def check_linked_meed(self) -> None:
+        try:
+            self.cursor.execute(
+                "SELECT id_meed FROM presentation WHERE id = ?",
+                (self.presentation_id,),
+            )
+            row = self.cursor.fetchone()
+            if row and row[0] is not None:
+                # Перевіряємо, чи існує таке нагородження в таблиці meed
+                self.cursor.execute("SELECT id FROM meed WHERE id = ?", (row[0],))
+                if self.cursor.fetchone():
+                    self.has_meed = True
+        except sqlite3.Error:
+            self.has_meed = False
+
+    def compose(self) -> ComposeResult:
+        msg = "Дійсно видалити запис про подання?"
+        if self.has_meed:
+            msg = "Знайдено запис про пов'язану нагороду, яка може існувати в натурі. Видалити разом запис про нагороду?"
+
+        with Vertical(id="link-box"):
+            yield Label("Видалення подання", id="link-title")
+            yield Static(msg, id="link-label")
+            with Horizontal():
+                if self.has_meed:
+                    yield Button("Видалити з нагородою", variant="error", id="del-both-btn")
+                    yield Button("Тільки подання", variant="warning", id="del-pres-only-btn")
+                else:
+                    yield Button("Видалити", variant="error", id="del-pres-only-btn")
+                yield Button("Скасувати", id="cancel-btn")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "del-both-btn":
+            self.dismiss("both")
+        elif event.button.id == "del-pres-only-btn":
+            self.dismiss("pres_only")
+        else:
+            self.dismiss("cancel")
+
+
+class ConfirmDeleteMeedModal(ModalScreen[str]):
+    """Модальне вікно для видалення нагородження зі зв'язаним поданням."""
+
+    def __init__(self, cursor, meed_id):
+        super().__init__()
+        self.cursor = cursor
+        self.meed_id = meed_id
+        self.linked_pres_id = None
+        self.check_linked_presentation()
+
+    def check_linked_presentation(self) -> None:
+        try:
+            self.cursor.execute(
+                "SELECT id FROM presentation WHERE id_meed = ?",
+                (self.meed_id,),
+            )
+            row = self.cursor.fetchone()
+            if row:
+                self.linked_pres_id = row[0]
+        except sqlite3.Error:
+            self.linked_pres_id = None
+
+    def compose(self) -> ComposeResult:
+        msg = "Дійсно видалити запис про нагородження?"
+        if self.linked_pres_id:
+            msg = f"Видалити пов'язане подання (ID: {self.linked_pres_id})? Якщо ні, подання перейде в категорію 'у залишку'."
+
+        with Vertical(id="link-box"):
+            yield Label("Видалення нагородження", id="link-title")
+            yield Static(msg, id="link-label")
+            with Horizontal():
+                if self.linked_pres_id:
+                    yield Button("Видалити з поданням", variant="error", id="del-both-btn")
+                    yield Button("Тільки нагороду (подання у залишок)", variant="warning", id="del-meed-only-btn")
+                else:
+                    yield Button("Видалити", variant="error", id="del-meed-only-btn")
+                yield Button("Скасувати", id="cancel-btn")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "del-both-btn":
+            self.dismiss("both")
+        elif event.button.id == "del-meed-only-btn":
+            self.dismiss("meed_only")
+        else:
+            self.dismiss("cancel")
+
+
+class ConfirmDeleteModal(ModalScreen[bool]):
+    """Модальне вікно підтвердження видалення особи та пов'язаних записів."""
+
+    def __init__(self, cursor, person_id):
+        super().__init__()
+        self.cursor = cursor
+        self.person_id = person_id
+        self.pres_count = 0
+        self.meed_count = 0
+        self.load_counts()
+
+    def load_counts(self) -> None:
+        try:
+            self.cursor.execute(
+                "SELECT COUNT(*) FROM presentation WHERE id_personality = ?",
+                (self.person_id,),
+            )
+            res_p = self.cursor.fetchone()
+            self.pres_count = res_p[0] if res_p else 0
+
+            self.cursor.execute(
+                "SELECT COUNT(*) FROM meed WHERE id_personality = ?",
+                (self.person_id,),
+            )
+            res_m = self.cursor.fetchone()
+            self.meed_count = res_m[0] if res_m else 0
+        except sqlite3.Error:
+            self.pres_count = 0
+            self.meed_count = 0
+
+    def compose(self) -> ComposeResult:
+        parts = []
+        if self.pres_count > 0:
+            parts.append(f"подань: {self.pres_count}")
+        if self.meed_count > 0:
+            parts.append(f"нагороджень: {self.meed_count}")
+
+        if parts:
+            related_str = "Знайдено " + ", ".join(parts) + ". "
+            msg = f"{related_str}Видалення запису про особу призведе до втрати цих записів. Продовжити?"
+        else:
+            msg = "Дійсно видалити запис про особу?"
+
+        with Vertical(id="link-box"):
+            yield Label("Підтвердження видалення", id="link-title")
+            yield Static(msg, id="link-label")
+            with Horizontal():
+                yield Button("Видалити", variant="error", id="confirm-del-btn")
+                yield Button("Скасувати", id="cancel-btn")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "confirm-del-btn":
+            self.dismiss(True)
+        else:
+            self.dismiss(False)
+
+
 class LinkDialogModal(ModalScreen[int | None]):
     """Модальне вікно для прив'язки подання до нагороди."""
 
@@ -234,6 +388,57 @@ class KartkaTab(VerticalScroll):
         self.show_card_screen("pres")
         if self.cursor:
             self.load_initial_data()
+
+    def delete_person_with_related_records(self, person_id: int) -> None:
+        try:
+            self.cursor.execute(
+                "DELETE FROM presentation WHERE id_personality = ?",
+                (person_id,),
+            )
+            self.cursor.execute(
+                "DELETE FROM meed WHERE id_personality = ?",
+                (person_id,),
+            )
+            self.cursor.execute(
+                "DELETE FROM personality WHERE id = ?",
+                (person_id,),
+            )
+            self.conn.commit()
+        except sqlite3.Error:
+            self.conn.rollback()
+            raise
+
+    def delete_presentation_with_logic(self, presentation_id: int, delete_meed: bool) -> None:
+        try:
+            if delete_meed:
+                self.cursor.execute(
+                    "SELECT id_meed FROM presentation WHERE id = ?",
+                    (presentation_id,),
+                )
+                row = self.cursor.fetchone()
+                if row and row[0] is not None:
+                    self.cursor.execute("DELETE FROM meed WHERE id = ?", (row[0],))
+            
+            self.cursor.execute("DELETE FROM presentation WHERE id = ?", (presentation_id,))
+            self.conn.commit()
+        except sqlite3.Error:
+            self.conn.rollback()
+            raise
+
+    def delete_meed_with_logic(self, meed_id: int, delete_pres: bool, linked_pres_id: int | None) -> None:
+        try:
+            self.cursor.execute("DELETE FROM meed WHERE id = ?", (meed_id,))
+            
+            if linked_pres_id:
+                if delete_pres:
+                    self.cursor.execute("DELETE FROM presentation WHERE id = ?", (linked_pres_id,))
+                else:
+                    self.cursor.execute("UPDATE presentation SET id_meed = NULL WHERE id = ?", (linked_pres_id,))
+            
+            self.conn.commit()
+        except sqlite3.Error:
+            self.conn.rollback()
+            raise
 
     def show_card_screen(self, screen: str) -> None:
         """Показати лише екран подання або нагородження без очищення полів."""
@@ -623,23 +828,64 @@ class KartkaTab(VerticalScroll):
         delete_mode = int(delete_value) if delete_value is not None else 0
 
         if delete_mode > 0:
-            try:
-                if delete_mode == 1 and self.current_person_id:
-                    self.cursor.execute("DELETE FROM personality WHERE id = ?", (self.current_person_id,))
-                elif delete_mode == 2 and self.current_presentation_id:
-                    self.cursor.execute("DELETE FROM presentation WHERE id = ?", (self.current_presentation_id,))
-                elif delete_mode == 3 and self.current_meed_id:
-                    self.cursor.execute("DELETE FROM meed WHERE id = ?", (self.current_meed_id,))
-                else:
-                    self.notify("Спочатку виберіть запис для видалення.", severity="warning")
-                    return
-                self.conn.commit()
-                self.notify("Видалення успішно виконано!", severity="information")
-                self.clear_person_data()
-            except sqlite3.Error as exc:
-                self.conn.rollback()
-                self.notify(f"Помилка видалення: {exc}", severity="error")
-            return
+            if delete_mode == 1 and self.current_person_id:
+                modal = ConfirmDeleteModal(self.cursor, self.current_person_id)
+                
+                def check_delete_modal(confirmed: bool) -> None:
+                    if confirmed:
+                        try:
+                            self.delete_person_with_related_records(self.current_person_id)
+                            self.notify("Видалення успішно виконано!", severity="information")
+                            self.clear_person_data()
+                        except sqlite3.Error as exc:
+                            self.notify(f"Помилка видалення: {exc}", severity="error")
+
+                self.app.push_screen(modal, check_delete_modal)
+                return
+
+            elif delete_mode == 2 and self.current_presentation_id:
+                modal = ConfirmDeletePresentationModal(self.cursor, self.current_presentation_id)
+
+                def check_pres_modal(action: str) -> None:
+                    if action in ("both", "pres_only"):
+                        try:
+                            self.delete_presentation_with_logic(
+                                self.current_presentation_id, 
+                                delete_meed=(action == "both")
+                            )
+                            self.current_presentation_id = None
+                            self.notify("Видалення подання успішно виконано!", severity="information")
+                            self.clear_person_data()
+                        except sqlite3.Error as exc:
+                            self.notify(f"Помилка видалення: {exc}", severity="error")
+
+                self.app.push_screen(modal, check_pres_modal)
+                return
+
+            elif delete_mode == 3 and self.current_meed_id:
+                modal = ConfirmDeleteMeedModal(self.cursor, self.current_meed_id)
+
+                def check_meed_modal(action: str) -> None:
+                    if action in ("both", "meed_only"):
+                        try:
+                            linked_pres_id = modal.linked_pres_id
+                            self.delete_meed_with_logic(
+                                self.current_meed_id, 
+                                delete_pres=(action == "both"),
+                                linked_pres_id=linked_pres_id
+                            )
+                            self.current_meed_id = None
+                            self.notify("Видалення нагородження успішно виконано!", severity="information")
+                            self.clear_person_data()
+                        except sqlite3.Error as exc:
+                            self.notify(f"Помилка видалення: {exc}", severity="error")
+
+                self.app.push_screen(modal, check_meed_modal)
+                return
+
+            else:
+                self.notify("Спочатку виберіть запис для видалення.", severity="warning")
+                return
 
         full_name = re.sub(r"\s+", " ", self.query_one("#full-name", Input).value).strip()
         if not full_name:

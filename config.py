@@ -1,7 +1,7 @@
 # config.py
 
 # --------- Параметри для роботи програми
-MASTERKEY = '1' # заменить на None после отладки
+MASTERKEY = None # заменить на None после отладки
 DATABASE_FILE_PATH = 'awards_v4e.db' # шлях до бази даних
 START_YEAR = 2014
 DEFAULT_FRAME_SIZE = (900, 700)

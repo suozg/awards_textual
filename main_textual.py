@@ -211,18 +211,35 @@ class AwardsTextualApp(App):
             self.push_screen(SplashScreen())
             self.run_worker(self._initialize_backend_task, thread=True)
         else:
-            def handle_login(result):
-                if not result:
-                    self.exit()
-                    return
-                self.password, self.conn, self.cursor = result
-                # ПЕРШИЙ КРОК ЗАСТАВКИ: після успішного логіну показуємо SplashScreen
-                self.push_screen(SplashScreen())
-                # ДРУГИЙ КРОК: запускаємо фонову ініціалізацію
-                self.run_worker(self._initialize_backend_task, thread=True)
+            self.push_screen(
+                LoginScreen(self.db_path, db_exists),
+                self._handle_login_result,
+            )
 
-            # Показуємо вікно логіну поверх порожнього дефолтного екрана
-            self.push_screen(LoginScreen(self.db_path, db_exists), handle_login)
+    def _handle_init_error(self, message: str) -> None:
+        self.notify(
+            f"Помилка ініціалізації: {message}",
+            severity="error",
+            timeout=10,
+        )
+
+        if isinstance(self.screen, SplashScreen):
+            self.pop_screen()
+
+        if MASTERKEY:
+            self.push_screen(
+                LoginScreen(self.db_path, Path(self.db_path).is_file()),
+                self._handle_login_result,
+            )
+
+    def _handle_login_result(self, result) -> None:
+        if not result:
+            self.exit()
+            return
+
+        self.password, self.conn, self.cursor = result
+        self.push_screen(SplashScreen())
+        self.run_worker(self._initialize_backend_task, thread=True)
 
     def _initialize_backend_task(self) -> None:
         try:
